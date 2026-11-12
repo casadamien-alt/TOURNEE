@@ -190,6 +190,10 @@ function dFr(dk){ return dk ? dk.split("-").reverse().join("/") : ""; }
 function absentPrevu(k, dk, sens){
   return (k.absences||[]).find(x => x.du && dk >= x.du && dk <= (x.au || x.du) && (x.sens === "both" || x.sens === sens)) || null;
 }
+function altDaysTxt(x){
+  const f = arr => (arr||[]).slice().sort().map(d => JOURS_LONG[d]).join(", ");
+  return [x.matin?.length ? "☀️ matin : " + f(x.matin) : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
+}
 function absTxt(x){
   const per = x.au && x.au !== x.du ? `du ${dFr(x.du)} au ${dFr(x.au)}` : `le ${dFr(x.du)}`;
   const tr = x.sens === "matin" ? " · matin" : x.sens === "soir" ? " · soir" : "";
@@ -604,7 +608,8 @@ function startRun(){
   const t = tour(sub.id); const sens = sub.sens;
   const kids = prepKids().filter(k => sub.present.includes(k.id));
   if (!kids.length){ toast("Cochez au moins un enfant"); return; }
-  const steps = kids.map(k => ({ type:"kid", kid:JSON.parse(JSON.stringify(k)), at:null }));
+  const today = dayKey(new Date());
+  const steps = kids.map(k => ({ type:"kid", kid: effKid(k, today, sens), at:null }));
   // une étape par établissement concerné, avec ses enfants (matin : après les ramassages ; soir : avant les dépôts)
   const etabSteps = t.etabs.map(e => ({ type:"etab", etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
   if (sens === "matin") steps.push(...etabSteps);
@@ -627,6 +632,16 @@ function knownEtabs(){
   const m = new Map();
   S.tournees.forEach(t => (t.etabs || []).forEach(e => { if ((e.nom || e.adresse) && !m.has(etabKey(e))) m.set(etabKey(e), e); }));
   return [...m.values()].sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+}
+// autre adresse selon le jour (ex. chez sa mère le vendredi soir et le lundi matin)
+function altFor(k, dk, sens){
+  const wd = new Date(dk + "T12:00:00").getDay();
+  return (k.altAdr || []).find(x => (x[sens] || []).includes(wd) && x.adresse) || null;
+}
+function effKid(k, dk, sens){
+  const c = JSON.parse(JSON.stringify(k)); const x = altFor(k, dk, sens);
+  if (x){ c.adresse = x.adresse; c.gps = x.gps || ""; c.altLabel = x.libelle || "autre adresse"; c.homeAdresse = k.adresse; }
+  return c;
 }
 function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
 function curIndex(){ const a = S.active; return a ? a.steps.findIndex(s => !s.at) : -1; }
@@ -979,7 +994,7 @@ function renderPrep(){
       ${sub.reorder ? `<div class="ord"><button data-act="pUp" data-i="${idx}" ${idx===0?"disabled":""}>▲</button><button data-act="pDown" data-i="${idx}" ${idx===kids.length-1?"disabled":""}>▼</button></div>`
         : `<input type="checkbox" class="chk" data-act="prepToggle" data-id="${k.id}" ${on?"checked":""}>`}
       <div class="grow"><div class="row"><span class="name grow">${esc(kidName(k))}</span>${sub.sens==="matin" && k.heureMatin ? `<span class="pill m">${k.heureMatin.replace(":","h")}</span>` : ""}</div>
-        <div class="addr">📍 ${esc(k.adresse || "Adresse manquante")}</div>
+        <div class="addr">📍 ${(() => { const ek = effKid(k, dayKey(new Date()), sub.sens); return esc(ek.adresse || "Adresse manquante") + (ek.altLabel ? ` <span class="pill" style="background:#e6f0ff;color:var(--call)">🏠 ${esc(ek.altLabel)}</span>` : ""); })()}</div>
         ${(() => { const ab = absentPrevu(k, dayKey(new Date()), sub.sens); return ab ? `<div style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absence prévue${ab.motif ? " : " + esc(ab.motif) : ""}</span></div>` : ""; })()}
         ${com ? `<div class="small muted" style="margin-top:4px">${sub.sens==="matin"?"☀️":"🌙"} ${esc(com)}</div>` : ""}</div></label>`;
   });
@@ -999,7 +1014,8 @@ function syncActive(){
   a.steps.forEach(s => {
     if (s.type !== "kid") return;
     const k = t.enfants.find(x => x.id === s.kid.id);
-    if (k && JSON.stringify(k) !== JSON.stringify(s.kid)){ s.kid = JSON.parse(JSON.stringify(k)); changed = true; }
+    const ek = k ? effKid(k, dayKey(a.start), a.sens) : null;
+    if (ek && JSON.stringify(ek) !== JSON.stringify(s.kid)){ s.kid = ek; changed = true; }
   });
   a.steps.forEach(s => {
     if (s.type !== "etab" || !s.etab) return;
@@ -1067,7 +1083,7 @@ function renderRun(){
       <div class="row">${runReorder && !s.at && movable.length > 1 ? `<div class="ord" style="flex-direction:row"><button data-act="rUp" data-i="${i}" ${movable[0]===i?"disabled":""}>▲</button><button data-act="rDown" data-i="${i}" ${movable[movable.length-1]===i?"disabled":""}>▼</button></div>` : ""}<span class="num" style="${s.at?"background:var(--go)":""}">${s.at ? "✔" : n}</span>
         <span class="name grow">${esc(kidName(k))}</span>
         ${!night && k.heureMatin ? `<span class="pill m">prévu ${k.heureMatin.replace(":","h")}</span>` : ""}</div>
-      <div class="addr">📍 ${esc(k.adresse || "Adresse manquante")}</div>
+      <div class="addr">📍 ${esc(k.adresse || "Adresse manquante")}${k.altLabel ? ` <span class="pill" style="background:#e6f0ff;color:var(--call)">🏠 ${esc(k.altLabel)}</span>` : ""}</div>
       ${com ? `<div class="com ${night?"s":""}"><b>${night?"🌙 Dépôt :":"☀️ Ramassage :"}</b> ${esc(com)}</div>` : ""}
       ${k.note ? `<div class="small muted" style="margin-top:6px">📝 ${esc(k.note)}</div>` : ""}`;
     if (s.at){
@@ -1181,6 +1197,7 @@ function renderEdit(){
       <div class="grow"><div class="row"><span class="num">${i+1}</span><span class="name grow">${esc(kidName(k))}</span>${k.heureMatin?`<span class="pill m">${k.heureMatin.replace(":","h")}</span>`:""}</div>
         <div class="addr">📍 ${esc(k.adresse || "—")}</div>
         ${t.etabs.length > 1 ? `<div class="addr">🏫 ${esc(kidEtab(t, k).nom || "Établissement")}</div>` : ""}
+        ${(k.altAdr||[]).map(x => `<div class="addr">🏠 ${esc(x.libelle || "Autre adresse")} — ${altDaysTxt(x)}</div>`).join("")}
         <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
           <span class="small muted">${(k.contacts||[]).filter(c=>c.tel).length} contact(s)</span></div>
         ${(() => { const td = dayKey(new Date()); const nx = (k.absences||[]).filter(x => (x.au || x.du) >= td).sort((a,b) => a.du < b.du ? -1 : 1)[0]; return nx ? `<div style="margin-top:6px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absent ${esc(absTxt(nx))}</span></div>` : ""; })()}</div>
@@ -1571,6 +1588,20 @@ function drawKidForm(){
     <label class="f">☀️ Mode de ramassage le matin</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
     <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
+    <h3 style="margin-top:16px">🏠 Autres adresses selon le jour</h3>
+    <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b><button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
+      <div class="addr">📍 ${esc(x.adresse)}</div><div class="small" style="margin-top:2px">${altDaysTxt(x)}</div></div>`).join("") || `<p class="small muted" style="margin:0">Aucune : l'enfant est toujours pris et déposé à son adresse principale.</p>`}</div>
+    <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Ajouter une autre adresse</summary>
+      <div class="card" style="margin-top:8px;padding:10px">
+        <label class="f">Nom de l'adresse</label><input class="t" id="alt_lib" placeholder="ex. Chez sa mère">
+        <label class="f">Adresse complète</label>${addrField('id="alt_adr"', "", "Rue, code postal, ville")}
+        ${gpsField('id="alt_gps"', "")}
+        <label class="f">☀️ Ramassage ici le matin, le :</label>
+        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <label class="f">🌙 Dépôt ici le soir, le :</label>
+        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <button class="btn go w100" style="margin-top:10px" data-act="addAlt">Ajouter cette adresse</button>
+      </div></details>
     <h3 style="margin-top:16px">📅 Absences prévues</h3>
     <div id="absList">${(e.absences||[]).filter(x => (x.au || x.du) >= dayKey(new Date())).sort((a,b) => a.du < b.du ? -1 : 1).map(x => `<div class="row card" style="padding:8px 12px;margin:6px 0"><span class="grow small" style="font-weight:700">📅 ${esc(absTxt(x))}</span><button class="btn sm danger" data-act="delAbs" data-id="${x.id}">✖</button></div>`).join("") || `<p class="small muted" style="margin:0">Aucune absence prévue.</p>`}</div>
     <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Prévoir une absence</summary>
@@ -1915,6 +1946,13 @@ document.addEventListener("click", e => {
     case "addKid": kidForm(-1); break;
     case "editKid": kidForm(i); break;
     case "saveKid": saveKid(); break;
+    case "addAlt": { readKidForm(); const adr = document.getElementById("alt_adr").value.trim();
+      const m = [...document.querySelectorAll("[data-altm]:checked")].map(c => Number(c.dataset.altm));
+      const so = [...document.querySelectorAll("[data-alts]:checked")].map(c => Number(c.dataset.alts));
+      if (!adr){ toast("Indiquez l'adresse"); break; } if (!m.length && !so.length){ toast("Cochez au moins un jour"); break; }
+      editKid.altAdr = [...(editKid.altAdr||[]), { id: uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so }];
+      drawKidForm(); toast("Adresse ajoutée — pensez à Enregistrer"); break; }
+    case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); drawKidForm(); break;
     case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
       if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
       editKid.absences = [...(editKid.absences||[]), { id: uid(), du, au: au && au !== du ? au : "", sens: document.getElementById("ab_sens").value, motif: document.getElementById("ab_motif").value.trim() }];
