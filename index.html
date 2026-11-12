@@ -621,6 +621,13 @@ function startRun(){
 }
 function etabRef(a, e){ const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
 function SE(s, a){ return (s && s.etab) || a.etab; }   // établissement de l'étape (plusieurs établissements possibles)
+function etabKey(e){ return ((e.nom || "") + "|" + (e.adresse || "")).trim().toLowerCase(); }
+// établissements déjà saisis dans toutes les tournées (sans doublon)
+function knownEtabs(){
+  const m = new Map();
+  S.tournees.forEach(t => (t.etabs || []).forEach(e => { if ((e.nom || e.adresse) && !m.has(etabKey(e))) m.set(etabKey(e), e); }));
+  return [...m.values()].sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
+}
 function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
 function curIndex(){ const a = S.active; return a ? a.steps.findIndex(s => !s.at) : -1; }
 function validateStep(i, fromVoice){
@@ -1148,6 +1155,8 @@ function renderEdit(){
   ${t.etabs.map((e, ei) => `<div class="card"><div class="row"><h3 class="grow" style="margin:0">🏫 Établissement${t.etabs.length > 1 ? " " + (ei+1) : ""}</h3>
       ${t.etabs.length > 1 ? `<div class="ord" style="flex-direction:row"><button data-act="eUp" data-i="${ei}" ${ei===0?"disabled":""}>▲</button><button data-act="eDown" data-i="${ei}" ${ei===t.etabs.length-1?"disabled":""}>▼</button></div><button class="btn sm danger" data-act="delEtab" data-i="${ei}">✖</button>` : ""}</div>
     <p class="small muted" style="margin:4px 0 0">${t.etabs.length > 1 ? "Le matin, les établissements sont faits dans cet ordre après les ramassages ; le soir, dans l'ordre inverse avant les dépôts." : "Destination le matin, point de départ le soir."}</p>
+    ${(() => { const kn = knownEtabs().filter(x => !t.etabs.some(y => etabKey(y) === etabKey(x))); return kn.length ? `<label class="f">📋 Reprendre un établissement déjà enregistré</label>
+      <select class="t" data-etabpick="${ei}"><option value="">— choisir dans la liste —</option>${kn.map((x, n) => `<option value="${n}">${esc(x.nom || "Sans nom")}${x.adresse ? " — " + esc(x.adresse) : ""}</option>`).join("")}</select>` : ""; })()}
     <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etabs.${ei}.nom" value="${esc(e.nom)}" placeholder="ex. IME Les Tilleuls">
     <label class="f">Adresse complète</label>${addrField(`data-tf="etabs.${ei}.adresse"`, e.adresse, "Rue, code postal, ville")}
     ${gpsField(`data-tf="etabs.${ei}.gps"`, e.gps)}
@@ -2039,6 +2048,15 @@ document.addEventListener("change", e => {
   if (t.dataset.hor){
     const [ei, d, k] = t.dataset.hor.split("."); const e2 = tour(sub.id).etabs[Number(ei)];
     e2.horaires[d] = Object.assign({debut:"",fin:""}, e2.horaires[d]||{}); e2.horaires[d][k] = t.value; save(); return;
+  }
+  if (t.dataset.etabpick !== undefined && t.value !== ""){
+    const tr = tour(sub.id); const ei = Number(t.dataset.etabpick);
+    const kn = knownEtabs().filter(x => !tr.etabs.some(y => etabKey(y) === etabKey(x)));
+    const src = kn[Number(t.value)]; if (!src) return;
+    const dst = tr.etabs[ei];
+    ["nom","adresse","gps","tel"].forEach(f => dst[f] = src[f] || "");
+    dst.horaires = JSON.parse(JSON.stringify(src.horaires || {}));
+    linkEtabs(tr); save(); render(); toast(`${src.nom || "Établissement"} repris ✓ (horaires compris)`); return;
   }
   if (t.dataset.tf){
     const tr = tour(sub.id); const path = t.dataset.tf.split(".");
