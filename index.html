@@ -1599,7 +1599,7 @@ function drawKidForm(){
     <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
     <h3 style="margin-top:16px">🏠 Autres adresses selon le jour</h3>
-    <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b><button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
+    <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b>${x.alterne ? `<button class="btn sm" data-act="altFlip" data-id="${x.id}" title="Inverser semaine A / semaine B">⇄ Inverser les semaines</button>` : ""}<button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
       <div class="addr">📍 ${esc(x.adresse)}</div><div class="small" style="margin-top:2px">${altDaysTxt(x)}</div></div>`).join("") || `<p class="small muted" style="margin:0">Aucune : l'enfant est toujours pris et déposé à son adresse principale.</p>`}</div>
     <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Ajouter une autre adresse</summary>
       <div class="card" style="margin-top:8px;padding:10px">
@@ -1968,6 +1968,7 @@ document.addEventListener("click", e => {
       editKid.altAdr = [...(editKid.altAdr||[]), { id: uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt }];
       drawKidForm(); toast("Adresse ajoutée — pensez à Enregistrer"); break; }
     case "altAll": { e.preventDefault(); const boxes = [...document.querySelectorAll(`[data-${id}]`)].filter(c => Number(c.dataset[id]) <= 5); const on = !boxes.every(c => c.checked); boxes.forEach(c => c.checked = on); break; }
+    case "altFlip": { readKidForm(); const x = (editKid.altAdr||[]).find(y => y.id === id); if (x && x.alterne){ x.alterne = addDays(mondayOf(x.alterne), 7); drawKidForm(); toast(altWeekOn(x, dayKey(new Date())) ? "Inversé : cette adresse vaut maintenant CETTE semaine — pensez à Enregistrer" : "Inversé : cette adresse vaudra la SEMAINE PROCHAINE — pensez à Enregistrer"); } break; }
     case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); drawKidForm(); break;
     case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
       if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
