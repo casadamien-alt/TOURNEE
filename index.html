@@ -267,7 +267,7 @@ function normalize(st){
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
   st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
-  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
+  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, pause: !!t.pause, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
     ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
@@ -980,6 +980,7 @@ function helpSheet(){
 }
 
 /* ---------- Accueil : liste des tournées ---------- */
+let pausedOpen = false;
 function renderHome(){
   let h = "";
   if (!S.tournees.length){
@@ -1001,7 +1002,7 @@ function renderHome(){
       <div class="small muted">${esc(nt?.nom || "")}</div></div></div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-act="agendaNext">📅 Agenda</button><button class="btn sm" data-act="editNext">✏️ Modifier</button><button class="btn sm danger" data-act="clearNext">✖ Effacer</button></div></div>`; }
   h += `<p class="muted small" style="margin:0 0 10px;font-weight:700">${JOURS[today.getDay()]} ${today.getDate()} ${MOIS[today.getMonth()]} — choisissez la tournée à lancer</p>`;
-  S.tournees.forEach(t => {
+  S.tournees.filter(t => !t.pause).forEach(t => {
     const nm = t.enfants.filter(k => k.matin !== false).length, ns = t.enfants.filter(k => k.soir !== false).length;
     h += `<div class="card">
       <div class="row"><div class="grow"><div class="name">${esc(t.nom)}</div>
@@ -1019,6 +1020,11 @@ function renderHome(){
         <button class="btn night grow" data-act="prep" data-id="${t.id}" data-sens="soir" ${ns?"":"disabled"}>🌙 Lancer le soir</button>
       </div></div>`;
   });
+  const paused = S.tournees.filter(t => t.pause);
+  if (!S.tournees.some(t => !t.pause)) h += `<div class="card empty muted">Toutes vos tournées sont en pause.</div>`;
+  if (paused.length) h += `<details class="card" style="padding:10px 14px" ${pausedOpen ? "open" : ""} id="pausedBox"><summary style="font-weight:900;cursor:pointer">⏸ Tournées en pause (${paused.length})</summary>
+    ${paused.map(t => `<div class="row" style="border-top:1px solid var(--line);padding:8px 0;margin-top:6px"><div class="grow"><b>${esc(t.nom)}</b><div class="small muted">${t.enfants.length} enfant${t.enfants.length>1?"s":""} · ${esc((t.etabs||[]).map(e => e.nom).filter(Boolean).join(", "))}</div></div>
+      <button class="btn sm" data-act="editTour" data-id="${t.id}">✏️</button><button class="btn sm go" data-act="unpause" data-id="${t.id}">▶ Reprendre</button></div>`).join("")}</details>`;
   h += `<button class="btn w100" data-act="planOpen" style="margin-top:4px">📅 Planifier ma prochaine tournée</button>`;
   h += `<button class="btn w100" data-act="newTour" style="margin-top:8px">➕ Nouvelle tournée</button>`;
   return h;
@@ -1312,7 +1318,9 @@ function renderEdit(){
     </div>`;
   }
   h += `<button class="btn go lg" style="margin-top:14px" data-act="saveTour">✅ Valider les modifications</button>`;
-  h += `<button class="btn danger w100" style="margin-top:18px" data-act="delTour">🗑 Supprimer cette tournée</button>`;
+  h += t.pause ? `<button class="btn go w100" style="margin-top:18px" data-act="unpause" data-id="${t.id}">▶ Reprendre cette tournée</button>`
+    : `<button class="btn w100" style="margin-top:18px" data-act="pause" data-id="${t.id}">⏸ Mettre cette tournée en pause</button>`;
+  h += `<button class="btn danger w100" style="margin-top:10px" data-act="delTour">🗑 Supprimer cette tournée</button>`;
   return h;
 }
 
@@ -1546,7 +1554,7 @@ function renderFamilles(){
     if (t.remplacement?.actif && t.remplacement.tel) useful.push({ lbl: "🔁 Personne remplacée — " + (t.remplacement.nom || ""), tel: t.remplacement.tel });
     (t.etabs || []).forEach(e => { if (e.tel) useful.push({ lbl: "🏫 " + (e.nom || "Établissement"), tel: e.tel }); });
     if (!kids.length && (q || !useful.length)) return;
-    h += `<div class="small muted" style="font-weight:900;margin:14px 2px 6px">🚐 ${esc(t.nom)}</div>`;
+    h += `<div class="small muted" style="font-weight:900;margin:14px 2px 6px">🚐 ${esc(t.nom)}${t.pause ? " (en pause)" : ""}</div>`;
     if (!q && useful.length) h += `<div class="card" style="padding:10px 14px">${useful.map(u => `<div class="row" style="padding:4px 0"><span class="grow small" style="font-weight:800">${esc(u.lbl)}</span>
       <a class="btn sm callf" data-href="${esc(telHref(u.tel))}">📞</a><a class="btn sm smsf" data-href="${esc(smsHref(u.tel, ""))}">💬</a></div>`).join("")}</div>`;
     kids.forEach(k => {
@@ -1679,6 +1687,7 @@ function addrField(attr, value, ph){
     <div class="row" style="margin-top:6px"><a class="btn sm" data-addrcheck target="_blank" rel="noopener" href="${esc(mapsSearch(value))}">🔎 Vérifier sur Google Maps</a>
     <span class="small" data-addrhint style="color:var(--warn);font-weight:700">${esc(addrHint(value))}</span></div></div>`;
 }
+document.addEventListener("toggle", e => { if (e.target.id === "pausedBox") pausedOpen = e.target.open; }, true);
 document.addEventListener("input", e => {
   if (e.target.id === "famSearch"){ famQ = e.target.value; const pos = e.target.selectionStart; render(); const el = document.getElementById("famSearch"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(x){} } return; }
   const t = e.target; if (!t.dataset || !t.dataset.addr) return;
@@ -2170,7 +2179,7 @@ document.addEventListener("click", e => {
       let dk = el.dataset.date, sens = el.dataset.sens;
       if (sens === "soir"){ dk = nextSchoolDay(t, dk); sens = "matin"; } else { sens = "soir"; }
       planForm({ tourneeId:tid, date:dk, sens }); break; }
-    case "planOpen": { const t = S.tournees[0]; const now = new Date(); const td = dayKey(now);
+    case "planOpen": { const t = S.tournees.find(x => !x.pause) || S.tournees[0]; const now = new Date(); const td = dayKey(now);
       const dk = now.getHours() < 12 && isSchoolDay(t, td) ? td : nextSchoolDay(t, td);
       planForm({ tourneeId:t?.id, date: now.getHours() >= 12 && now.getHours() < 16 && isSchoolDay(t, td) ? td : dk, sens: now.getHours() >= 12 && now.getHours() < 16 && isSchoolDay(t, td) ? "soir" : "matin" }); break; }
     case "planSave": { const tid = document.getElementById("pf_t").value, dk = document.getElementById("pf_d").value, sens = document.getElementById("pf_s").value, hh = document.getElementById("pf_h").value;
@@ -2181,6 +2190,8 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "pause": { const t = tour(id); t.pause = true; save(); sub = null; render(); window.scrollTo(0,0); toast(`« ${t.nom} » mise en pause — retrouvez-la en bas de l'accueil`); break; }
+    case "unpause": { const t = tour(id); t.pause = false; save(); if (sub?.type !== "edit") sub = null; render(); toast(`« ${t.nom} » reprise ✓`); break; }
     case "famMsgs": famMsgsSheet(id); break;
     case "clearDateUnique": tour(sub.id).dateUnique = ""; save(); render(); break;
     case "delTourQuick": { pendingTourDel = id; const t = tour(id); confirmSheet(`Supprimer « ${esc(t?.nom || "")} » ?`, "Cette tournée occasionnelle est passée. Son historique est conservé.", "delTourQuickOk", "Oui, supprimer"); break; }
