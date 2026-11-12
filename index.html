@@ -463,6 +463,7 @@ function geoUpdate(){
 }
 document.addEventListener("visibilitychange", () => geoUpdate());
 
+let arrMsgKey = "devant";
 function arriveSheet(){
   const a = S.active; if (!a) return;
   const ci = curIndex();
@@ -488,11 +489,17 @@ function arriveSheet(){
   }
   if (ci >= 0 && a.steps[ci].type === "kid"){
     const k = a.steps[ci].kid; const cs = (k.contacts||[]).filter(c => c.tel);
-    const msg = fill(S.tpl.devant, k, "");
+    const keys = a.sens === "matin" ? ["devant","avantMatin","valideMatin"] : ["devant","avantSoir","valideSoir"];
+    if (!keys.includes(arrMsgKey)) arrMsgKey = "devant";
+    const now = new Date(); const nowHM = p2(now.getHours()) + ":" + p2(now.getMinutes());
+    const heure = arrMsgKey.startsWith("valide") ? nowHM : (k.heureMatin || nowHM);
+    const msg = fill(S.tpl[arrMsgKey], k, heure);
+    const short = { devant:"🚐 Je suis devant", avantMatin:"⏰ J'arrive", avantSoir:"⏰ J'arrive", valideMatin:"✅ Bien monté(e)", valideSoir:"✅ Bien déposé(e)" };
     h += `<div class="card" style="margin-top:14px;text-align:left"><b>👨‍👩‍👧 Prévenir la famille de ${esc(k.prenom)}</b>
-      ${cs.length ? `<div class="msgbox small" style="margin-top:6px">${esc(msg)}</div>` + cs.map(c => `<div class="contact"><div class="small" style="font-weight:800">${esc(contactLabel(c))} · ${esc(c.tel)}</div>
+      <div class="row" style="margin-top:8px">${keys.map(x => `<button class="btn sm ${x===arrMsgKey?"primary":""}" data-act="arrMsg" data-id="${x}">${short[x]}</button>`).join("")}</div>
+      ${cs.length ? `<div class="msgbox small" style="margin-top:8px">${esc(msg)}</div>` + cs.map(c => `<div class="contact"><div class="small" style="font-weight:800">${esc(contactLabel(c))} · ${esc(c.tel)}</div>
         <div class="row" style="margin-top:6px"><a class="btn callf grow" data-href="${esc(telHref(c.tel))}">📞 Appeler</a>
-        <a class="btn smsf grow" data-href="${esc(smsHref(c.tel, msg))}">💬 « Je suis devant »</a></div></div>`).join("")
+        <a class="btn smsf grow" data-href="${esc(smsHref(c.tel, msg))}">💬 Envoyer ce message</a></div></div>`).join("")
         : `<p class="small muted" style="margin:6px 0 0">Aucun numéro enregistré pour cette famille.</p>`}</div>`;
   }
   h += `<button class="btn w100" style="margin-top:12px;padding:14px" data-act="close">Pas encore</button></div>`;
@@ -1927,6 +1934,7 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "arrMsg": arrMsgKey = id; arriveSheet(); break;
     case "vcfKid": { const k = S.tournees.flatMap(t => t.enfants).find(x => x.id === id); saveVcf(contactRows().filter(r => r.kidId === id), `contacts-${(k?.prenom || "enfant").replace(/[^\wÀ-ÿ-]/g, "")}.vcf`); break; }
     case "vcfAll": saveVcf(contactRows(), "contacts-transport-scolaire.vcf"); break;
     case "report": rep = null; reportSheet(); break;
