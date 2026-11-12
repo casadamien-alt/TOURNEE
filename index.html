@@ -246,7 +246,7 @@ function migrateEtab(e){
   delete e.heureDebut; delete e.heureFin;
   return e;
 }
-function linkEtabs(t){ t.etab = t.etabs[0]; t.enfants.forEach(k => { if (!t.etabs.some(e => e.id === k.etabId)) k.etabId = t.etabs[0].id; }); return t; }
+function linkEtabs(t){ t.etab = t.etabs[0]; if (t.multi === undefined || t.etabs.length > 1) t.multi = t.etabs.length > 1; t.enfants.forEach(k => { if (!t.etabs.some(e => e.id === k.etabId)) k.etabId = t.etabs[0].id; }); return t; }
 function normalize(st){
   if (!st || typeof st !== "object") return blankState();
   // migration depuis la 1re version (une seule liste d'enfants)
@@ -266,7 +266,7 @@ function normalize(st){
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
   st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
-  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée",
+  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi,
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
     ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
@@ -1195,7 +1195,8 @@ function renderEdit(){
     <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
     ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
   </div>`).join("")}
-  <button class="btn w100" style="margin-bottom:12px" data-act="addEtab">🏫 ＋ Ajouter un autre établissement</button>
+  ${t.multi ? `<button class="btn w100" style="margin-bottom:12px" data-act="addEtab">🏫 ＋ Ajouter un autre établissement</button>`
+    : `<p class="small" style="margin:-4px 0 12px;text-align:center"><a href="#" data-act="addEtab">Cette tournée dessert finalement plusieurs établissements ?</a></p>`}
   <div class="card"><div class="row"><h3 class="grow" style="margin:0">👧 Enfants – ordre du matin</h3><button class="btn sm brand" data-act="addKid">➕ Ajouter</button></div>
     <p class="small muted">Le soir, la tournée suit automatiquement l'ordre inverse.</p>
     ${t.enfants.length > 1 ? `<button class="btn sm" data-act="sortTime">🕗 Trier par heure de ramassage</button>` : ""}
@@ -1949,7 +1950,13 @@ document.addEventListener("click", e => {
   switch (a){
     case "close": closeSheet(); break;
     case "back": sub = null; render(); window.scrollTo(0,0); break;
-    case "newTour": { const t = { id:uid(), nom:"Tournée " + (S.tournees.length+1), etabs:[{id:uid(),nom:"",adresse:"",tel:"",horaires:{}}], responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
+    case "newTour": openSheet(`<h2>➕ Nouvelle tournée</h2>
+      <label class="f">Nom de la tournée</label><input class="t" id="nt_nom" placeholder="ex. Circuit IME Les Tilleuls">
+      <label class="f">Combien d'établissements ?</label>
+      <button class="btn lg" style="margin-top:6px;text-align:left;justify-content:flex-start" data-act="newTourOk" data-id="one">🏫 Un seul établissement<span class="small muted" style="display:block;font-weight:600;margin-left:6px">tous les enfants vont au même endroit</span></button>
+      <button class="btn lg" style="margin-top:8px;text-align:left;justify-content:flex-start" data-act="newTourOk" data-id="multi">🏫🏫 Plusieurs établissements<span class="small muted" style="display:block;font-weight:600;margin-left:6px">chaque enfant a son établissement</span></button>
+      <button class="btn w100" style="margin-top:12px" data-act="close">Annuler</button>`); setTimeout(() => document.getElementById("nt_nom")?.focus(), 50); break;
+    case "newTourOk": { const nm = (document.getElementById("nt_nom")?.value || "").trim(); const multi = el.dataset.id === "multi"; closeSheet(); const t = { id:uid(), nom: nm || "Tournée " + (S.tournees.length+1), multi, etabs: (multi ? [1,2] : [1]).map(() => ({id:uid(),nom:"",adresse:"",tel:"",horaires:{}})), responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
     case "saveTour": { const t = tour(sub.id);
       if (!t.nom.trim()){ toast("Donnez un nom à la tournée"); break; }
       if (!t.etab.adresse) toast("Tournée enregistrée ✓ (pensez à l'adresse de l'établissement)"); else toast("Tournée enregistrée ✓");
@@ -2026,7 +2033,7 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
-    case "addEtab": { const t = tour(sub.id); t.etabs.push({ id: uid(), nom:"", adresse:"", tel:"", gps:"", horaires:{} }); linkEtabs(t); save(); render(); toast("Établissement ajouté"); break; }
+    case "addEtab": { e.preventDefault(); const t = tour(sub.id); t.multi = true; t.etabs.push({ id: uid(), nom:"", adresse:"", tel:"", gps:"", horaires:{} }); linkEtabs(t); save(); render(); toast("Établissement ajouté"); break; }
     case "delEtab": { const t = tour(sub.id); if (t.etabs.length < 2) break; pendingEtab = i; confirmSheet(`Retirer ${esc(t.etabs[i].nom || "cet établissement")} ?`, "Les enfants qui y allaient seront rattachés au premier établissement.", "delEtabOk", "Oui, retirer"); break; }
     case "delEtabOk": { const t = tour(sub.id); t.etabs.splice(pendingEtab, 1); linkEtabs(t); save(); closeSheet(); render(); break; }
     case "eUp": case "eDown": { const t = tour(sub.id); const j = a === "eUp" ? i-1 : i+1; if (j >= 0 && j < t.etabs.length){ [t.etabs[i], t.etabs[j]] = [t.etabs[j], t.etabs[i]]; linkEtabs(t); save(); render(); } break; }
