@@ -486,6 +486,15 @@ function arriveSheet(){
         ? `<a class="btn go arrive-ok" data-act="validateArr" data-i="${ci}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">${okInner}</a>`
         : `<button class="btn go arrive-ok" data-act="validateArr" data-i="${ci}">${okInner}</button>`}`;
   }
+  if (ci >= 0 && a.steps[ci].type === "kid"){
+    const k = a.steps[ci].kid; const cs = (k.contacts||[]).filter(c => c.tel);
+    const msg = fill(S.tpl.devant, k, "");
+    h += `<div class="card" style="margin-top:14px;text-align:left"><b>👨‍👩‍👧 Prévenir la famille de ${esc(k.prenom)}</b>
+      ${cs.length ? `<div class="msgbox small" style="margin-top:6px">${esc(msg)}</div>` + cs.map(c => `<div class="contact"><div class="small" style="font-weight:800">${esc(contactLabel(c))} · ${esc(c.tel)}</div>
+        <div class="row" style="margin-top:6px"><a class="btn callf grow" data-href="${esc(telHref(c.tel))}">📞 Appeler</a>
+        <a class="btn smsf grow" data-href="${esc(smsHref(c.tel, msg))}">💬 « Je suis devant »</a></div></div>`).join("")
+        : `<p class="small muted" style="margin:6px 0 0">Aucun numéro enregistré pour cette famille.</p>`}</div>`;
+  }
   h += `<button class="btn w100" style="margin-top:12px;padding:14px" data-act="close">Pas encore</button></div>`;
   openSheet(h);
 }
