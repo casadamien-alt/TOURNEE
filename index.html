@@ -725,7 +725,7 @@ function contactRows(){
       if (seen.has(name.toLowerCase()) && c.nom) name = base + " " + role + " " + c.nom;
       let i = 2; const n0 = name; while (seen.has(name.toLowerCase())) name = n0 + " " + i++;
       seen.add(name.toLowerCase());
-      rows.push({ name, tel: c.tel, note: `Transport scolaire – ${t.nom}${c.nom ? " – " + c.nom : ""}${c.lien ? " (" + c.lien + ")" : ""} – enfant : ${kidName(k)}` });
+      rows.push({ kidId: k.id, name, tel: c.tel, note: `Transport scolaire – ${t.nom}${c.nom ? " – " + c.nom : ""}${c.lien ? " (" + c.lien + ")" : ""} – enfant : ${kidName(k)}` });
     });
   });
   return rows;
@@ -737,6 +737,26 @@ function contactsCsv(){
   return lines.join("\r\n");
 }
 let dlNs = null;
+const STANDALONE = !window.claude;
+function vcard(rows){
+  const e = v => String(v).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+  return rows.map(r => ["BEGIN:VCARD", "VERSION:3.0", `N:;${e(r.name)};;;`, `FN:${e(r.name)}`, `TEL;TYPE=CELL:${telNorm(r.tel)}`,
+    `NOTE:${e(r.note)}`, "CATEGORIES:Transport scolaire", "END:VCARD"].join("\r\n")).join("\r\n") + "\r\n";
+}
+function saveVcf(rows, name){
+  if (!rows.length){ toast("Aucun numéro à ajouter"); return; }
+  const blob = new Blob([vcard(rows)], { type: "text/vcard" });
+  const u = URL.createObjectURL(blob); const a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 30000);
+  openSheet(`<div style="text-align:center"><div style="font-size:46px">📇</div><h2>Dernière étape sur le téléphone</h2></div>
+    <ol style="padding-left:20px;line-height:1.5">
+      <li>Touchez la notification <b>« ${esc(name)} »</b> en haut de l'écran (ou ouvrez-le depuis vos <b>Téléchargements</b>).</li>
+      <li>Le téléphone propose d'<b>importer</b> le contact : choisissez votre <b>compte Google</b> puis <b>Importer</b> / <b>Enregistrer</b>.</li>
+    </ol>
+    <p class="small muted">${rows.length} contact${rows.length>1?"s":""} : ${rows.map(r => esc(r.name)).join(", ")}</p>
+    <button class="btn w100" data-act="close">OK</button>`);
+}
 async function exportContacts(){
   const rows = contactRows();
   if (!rows.length){ toast("Aucun numéro de famille enregistré"); return; }
@@ -1058,7 +1078,7 @@ function renderEdit(){
         <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
           <span class="small muted">${(k.contacts||[]).filter(c=>c.tel).length} contact(s)</span></div>
         ${(() => { const td = dayKey(new Date()); const nx = (k.absences||[]).filter(x => (x.au || x.du) >= td).sort((a,b) => a.du < b.du ? -1 : 1)[0]; return nx ? `<div style="margin-top:6px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absent ${esc(absTxt(nx))}</span></div>` : ""; })()}</div>
-      <button class="btn sm" data-act="editKid" data-i="${i}">✏️</button></div></div>`;
+      <div class="ord" style="gap:6px"><button class="btn sm" data-act="editKid" data-i="${i}">✏️</button>${STANDALONE && (k.contacts||[]).some(c => c.tel) ? `<button class="btn sm" data-act="vcfKid" data-id="${k.id}" title="Ajouter aux contacts du téléphone">📇</button>` : ""}</div></div></div>`;
   });
   const soirKids = eligible(t, "soir");
   if (soirKids.length > 1){
@@ -1341,6 +1361,8 @@ function renderReglages(){
   <div class="card"><h3>📇 Ajouter les familles à mes contacts</h3>
     <p class="small muted" style="margin-top:0">Crée un fichier avec tous les numéros des familles, nommés pour la commande vocale (« Léa Maman », « Tom Papa »…). Importez-le ensuite dans Google Contacts : ils apparaîtront sur votre téléphone et dans Android Auto.</p>
     ${(() => { const r = contactRows(); return r.length ? `<div class="msgbox small" style="max-height:140px;overflow:auto">${r.map(x => esc(x.name) + " · " + esc(x.tel)).join("<br>")}</div>` : `<p class="small muted">Aucun numéro enregistré pour l'instant.</p>`; })()}
+    ${STANDALONE ? `<button class="btn go" style="margin-top:10px" data-act="vcfAll">📇 Ajouter tous les contacts au téléphone</button>
+      <p class="small muted" style="margin:6px 0 0">Sur le téléphone : un fichier est créé, touchez-le puis « Importer ». Autre solution ci-dessous (fichier pour Google Contacts).</p>` : ""}
     <button class="btn" style="margin-top:10px" data-act="exportContacts">📇 Créer le fichier de contacts</button>
     <details style="margin-top:10px"><summary class="small" style="font-weight:800;cursor:pointer">Comment l'importer ?</summary>
       <ol class="small muted" style="padding-left:18px;margin:6px 0 0">
@@ -1406,8 +1428,10 @@ function confirmSheet(title, text, act, label){
 }
 
 let editKid = null, editKidIndex = -1;
+let editKidOrig = null;
 function kidForm(i){
   const t = tour(sub.id);
+  editKidOrig = i >= 0 ? JSON.parse(JSON.stringify(t.enfants[i].contacts || [])) : [];
   editKidIndex = i;
   editKid = i >= 0 ? JSON.parse(JSON.stringify(t.enfants[i])) :
     { id:uid(), prenom:"", nom:"", adresse:"", heureMatin:"", comMatin:"", comSoir:"", note:"", matin:true, soir:true, contacts:[{nom:"",lien:"Mère",tel:"",type:"Portable"},{nom:"",lien:"Père",tel:"",type:"Portable"}] };
@@ -1475,6 +1499,13 @@ function saveKid(){
   const t = tour(sub.id);
   if (editKidIndex >= 0) t.enfants[editKidIndex] = e; else t.enfants.push(e);
   syncActive(); save(); closeSheet(); render(); toast("Enregistré ✓");
+  const before = JSON.stringify((editKidOrig||[]).map(c => c.tel)), after = JSON.stringify(e.contacts.map(c => c.tel));
+  if (STANDALONE && after !== before && e.contacts.some(c => c.tel)){
+    openSheet(`<div style="text-align:center"><div style="font-size:42px">📇</div><h2>Ajouter à vos contacts ?</h2>
+      <p class="muted">Enregistrer les numéros de la famille de ${esc(e.prenom)} dans les contacts du téléphone (pratique pour « Ok Google, appelle ${esc(e.prenom)} Maman »).</p></div>
+      <button class="btn go lg" data-act="vcfKid" data-id="${e.id}">📇 Oui, ajouter à mes contacts</button>
+      <button class="btn w100" style="margin-top:8px" data-act="close">Non merci</button>`);
+  }
 }
 
 async function copyText(txt){
@@ -1831,6 +1862,8 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "vcfKid": { const k = S.tournees.flatMap(t => t.enfants).find(x => x.id === id); saveVcf(contactRows().filter(r => r.kidId === id), `contacts-${(k?.prenom || "enfant").replace(/[^\wÀ-ÿ-]/g, "")}.vcf`); break; }
+    case "vcfAll": saveVcf(contactRows(), "contacts-transport-scolaire.vcf"); break;
     case "report": rep = null; reportSheet(); break;
     case "repMode": rep.mode = id; reportSheet(); break;
     case "repPdf": saveReport("pdf"); break;
