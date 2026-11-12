@@ -123,6 +123,7 @@ input[type=time].tm{border:1px solid var(--line);border-radius:10px;padding:6px 
 <main id="main"></main>
 <nav class="tabs" id="tabs">
   <button data-v="tournees"><span class="i">🚐</span>Tournées</button>
+  <button data-v="familles"><span class="i">📇</span>Familles</button>
   <button data-v="historique"><span class="i">🕓</span>Historique</button>
   <button data-v="reglages"><span class="i">⚙️</span>Réglages</button>
 </nav>
@@ -932,6 +933,7 @@ function render(){
   else if (view === "tournees" && sub?.type === "prep"){ const t = tour(sub.id); title = sensIcon(sub.sens) + " " + esc(t?.nom); subt = "Qui est présent ?"; }
   else if (view === "tournees" && sub?.type === "edit"){ title = "✏️ " + esc(tour(sub.id)?.nom || "Tournée"); }
   else if (view === "historique") title = "🕓 Historique";
+  else if (view === "familles") title = "📇 Familles";
   else if (view === "reglages") title = "⚙️ Réglages";
   hdr.innerHTML = `<h1>${title}<span class="status" id="syncStatus">${esc(lastStatus)}</span></h1>${subt ? `<div class="sub">${subt}</div>` : ""}`;
   const m = document.getElementById("main");
@@ -942,6 +944,7 @@ function render(){
     else m.innerHTML = renderHome();
   }
   if (view === "historique") m.innerHTML = renderHist();
+  if (view === "familles") m.innerHTML = renderFamilles();
   if (view === "reglages") m.innerHTML = renderReglages();
   renderVoice();
   renderHelp();
@@ -1528,6 +1531,49 @@ async function saveReport(kind){
   } catch(e){ toast("Erreur lors de la création du relevé"); }
 }
 
+/* ---------- Familles : contacter à tout moment ---------- */
+let famQ = "";
+function renderFamilles(){
+  const q = norm(famQ || "");
+  const all = S.tournees.flatMap(t => t.enfants.map(k => ({ t, k })));
+  const match = ({ t, k }) => !q || norm(kidName(k) + " " + t.nom + " " + (k.contacts||[]).map(c => (c.nom||"") + " " + (c.lien||"")).join(" ")).includes(q);
+  let h = `<input class="t" id="famSearch" placeholder="🔎 Rechercher un enfant, un parent…" value="${esc(famQ)}" style="margin-bottom:12px">`;
+  if (!all.length) return h + `<div class="card empty muted">Aucun enfant enregistré.</div>`;
+  S.tournees.forEach(t => {
+    const kids = t.enfants.filter(k => match({ t, k }));
+    const useful = [];
+    if (t.responsable?.tel) useful.push({ lbl: "👔 Responsable — " + (t.responsable.nom || ""), tel: t.responsable.tel });
+    if (t.remplacement?.actif && t.remplacement.tel) useful.push({ lbl: "🔁 Personne remplacée — " + (t.remplacement.nom || ""), tel: t.remplacement.tel });
+    (t.etabs || []).forEach(e => { if (e.tel) useful.push({ lbl: "🏫 " + (e.nom || "Établissement"), tel: e.tel }); });
+    if (!kids.length && (q || !useful.length)) return;
+    h += `<div class="small muted" style="font-weight:900;margin:14px 2px 6px">🚐 ${esc(t.nom)}</div>`;
+    if (!q && useful.length) h += `<div class="card" style="padding:10px 14px">${useful.map(u => `<div class="row" style="padding:4px 0"><span class="grow small" style="font-weight:800">${esc(u.lbl)}</span>
+      <a class="btn sm callf" data-href="${esc(telHref(u.tel))}">📞</a><a class="btn sm smsf" data-href="${esc(smsHref(u.tel, ""))}">💬</a></div>`).join("")}</div>`;
+    kids.forEach(k => {
+      const cs = (k.contacts||[]).filter(c => c.tel);
+      h += `<div class="card"><div class="row"><span class="name grow">${esc(kidName(k))}</span>${cs.length ? `<button class="btn sm" data-act="famMsgs" data-id="${k.id}">📝 Messages</button>` : ""}</div>
+        <div class="addr">📍 ${esc(k.adresse || "—")}</div>
+        ${cs.length ? cs.map(c => `<div class="contact"><div class="small" style="font-weight:800">${esc(contactLabel(c))} · ${esc(c.tel)}</div>
+          <div class="row" style="margin-top:6px"><a class="btn callf grow" data-href="${esc(telHref(c.tel))}">📞 Appeler</a><a class="btn smsf grow" data-href="${esc(smsHref(c.tel, ""))}">💬 SMS</a></div></div>`).join("")
+          : `<p class="small muted" style="margin:6px 0 0">Aucun numéro enregistré.</p>`}</div>`;
+    });
+  });
+  return h;
+}
+function famMsgsSheet(id){
+  const k = S.tournees.flatMap(t => t.enfants).find(x => x.id === id); if (!k) return;
+  const cs = (k.contacts||[]).filter(c => c.tel);
+  const keys = ["avantMatin","avantSoir","devant"];
+  let h = `<h2>📝 Messages pour la famille de ${esc(k.prenom)}</h2>`;
+  keys.forEach(key => {
+    const msg = fill(S.tpl[key], k, k.heureMatin || "");
+    h += `<div class="card"><div class="small muted" style="font-weight:800">${TPL_LABELS[key]}</div><div class="msgbox" style="margin:6px 0">${esc(msg)}</div>
+      <div class="row">${cs.map(c => `<a class="btn sm sms" data-href="${esc(smsHref(c.tel, msg))}">💬 ${esc(contactLabel(c))}</a>`).join("")}</div></div>`;
+  });
+  h += `<button class="btn w100" data-act="close">Fermer</button>`;
+  openSheet(h);
+}
+
 function renderHist(){
   const months = Object.keys(H).filter(mk => (H[mk]||[]).length).sort().reverse();
   if (!months.includes(histMonth)) months.unshift(histMonth);
@@ -1634,6 +1680,7 @@ function addrField(attr, value, ph){
     <span class="small" data-addrhint style="color:var(--warn);font-weight:700">${esc(addrHint(value))}</span></div></div>`;
 }
 document.addEventListener("input", e => {
+  if (e.target.id === "famSearch"){ famQ = e.target.value; const pos = e.target.selectionStart; render(); const el = document.getElementById("famSearch"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(x){} } return; }
   const t = e.target; if (!t.dataset || !t.dataset.addr) return;
   const box = t.closest(".addrbox"); if (!box) return;
   box.querySelector("[data-addrcheck]").href = mapsSearch(t.value);
@@ -2134,6 +2181,7 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "famMsgs": famMsgsSheet(id); break;
     case "clearDateUnique": tour(sub.id).dateUnique = ""; save(); render(); break;
     case "delTourQuick": { pendingTourDel = id; const t = tour(id); confirmSheet(`Supprimer « ${esc(t?.nom || "")} » ?`, "Cette tournée occasionnelle est passée. Son historique est conservé.", "delTourQuickOk", "Oui, supprimer"); break; }
     case "delTourQuickOk": S.tournees = S.tournees.filter(t => t.id !== pendingTourDel); save(); closeSheet(); render(); toast("Tournée supprimée (historique conservé)"); break;
