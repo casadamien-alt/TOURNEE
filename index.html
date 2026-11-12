@@ -1157,6 +1157,29 @@ function msgsSheet(i){
 }
 
 /* ---------- Édition d'une tournée ---------- */
+/* ---------- ordre des étapes (tournée à plusieurs établissements) ---------- */
+function orderSheet(){
+  const t = tour(sub.id); if (!t) return;
+  const kidsM = t.enfants.filter(k => k.matin !== false);
+  const row = (lbl, sub2, i, n, act, color) => `<div class="row" style="border-top:1px solid var(--line);padding:7px 0">
+      <div class="ord" style="flex-direction:row"><button data-act="${act}Up" data-i="${i}" ${i===0?"disabled":""}>▲</button><button data-act="${act}Down" data-i="${i}" ${i===n-1?"disabled":""}>▼</button></div>
+      <span class="num" style="background:${color}">${i+1}</span><div class="grow"><b>${lbl}</b>${sub2 ? `<div class="small muted">${sub2}</div>` : ""}</div></div>`;
+  const etabsUsed = t.etabs.filter(e => kidsM.some(k => kidEtab(t, k).id === e.id));
+  openSheet(`<h2>🗺️ Ordre des étapes</h2>
+    <p class="small muted" style="margin-top:0">Vérifiez l'ordre de la tournée avant de valider. Vous pourrez toujours le changer plus tard.</p>
+    <div class="card"><h3>☀️ Matin — 1. Ramassages</h3>
+      ${kidsM.map((k, i) => row(esc(kidName(k)), "🏫 " + esc(kidEtab(t, k).nom || "Établissement"), t.enfants.indexOf(k), t.enfants.length, "so", "var(--ink)")).join("") || `<p class="small muted">Aucun enfant le matin.</p>`}
+    </div>
+    <div class="card"><h3>☀️ Matin — 2. Établissements</h3>
+      ${t.etabs.map((e, i) => row("🏫 " + esc(e.nom || "Établissement " + (i+1)), "Déposer : " + (kidsM.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "personne"), i, t.etabs.length, "soE", "var(--brand-ink)")).join("")}
+    </div>
+    <div class="card" style="background:var(--night-soft)"><h3>🌙 Soir</h3>
+      <p class="small" style="margin:0">${etabsUsed.length ? "Établissements : " + t.etabs.slice().reverse().filter(e => t.enfants.some(k => k.soir !== false && kidEtab(t, k).id === e.id)).map(e => esc(e.nom || "Établissement")).join(" → ") + "<br>" : ""}Puis dépôts : ${eligible(t, "soir").map(k => esc(k.prenom)).join(" → ") || "personne"}</p>
+      <p class="small muted" style="margin:6px 0 0">${Array.isArray(t.ordreSoir) && t.ordreSoir.length ? "Ordre du soir personnalisé (modifiable dans la fiche)." : "Ordre inverse du matin (modifiable dans la fiche : « Ordre de dépôt du soir »)."}</p>
+    </div>
+    <button class="btn go lg" data-act="saveTour" data-final="1">✅ Valider cet ordre et enregistrer</button>
+    <button class="btn w100" style="margin-top:8px" data-act="close">Retour à la fiche</button>`);
+}
 function renderEdit(){
   const t = tour(sub.id); if (!t){ sub = null; return renderHome(); }
   let h = `<div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="back">← Retour</button><span class="grow"></span><button class="btn sm go" data-act="saveTour">✅ Valider</button></div>
@@ -1958,6 +1981,8 @@ document.addEventListener("click", e => {
       <button class="btn w100" style="margin-top:12px" data-act="close">Annuler</button>`); setTimeout(() => document.getElementById("nt_nom")?.focus(), 50); break;
     case "newTourOk": { const nm = (document.getElementById("nt_nom")?.value || "").trim(); const multi = el.dataset.id === "multi"; closeSheet(); const t = { id:uid(), nom: nm || "Tournée " + (S.tournees.length+1), multi, etabs: (multi ? [1,2] : [1]).map(() => ({id:uid(),nom:"",adresse:"",tel:"",horaires:{}})), responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
     case "saveTour": { const t = tour(sub.id);
+      if (!el.dataset.final && t.etabs.length > 1 && t.enfants.length){ orderSheet(); break; }
+      if (el.dataset.final) closeSheet();
       if (!t.nom.trim()){ toast("Donnez un nom à la tournée"); break; }
       if (!t.etab.adresse) toast("Tournée enregistrée ✓ (pensez à l'adresse de l'établissement)"); else toast("Tournée enregistrée ✓");
       clearTimeout(saveTimer); save(); flush(); sub = null; render(); window.scrollTo(0,0); break; }
@@ -2033,6 +2058,11 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "soUp": case "soDown": { const arr = tour(sub.id).enfants; const dir = a === "soUp" ? -1 : 1;
+      // saute les enfants qui ne font pas le matin
+      let j = i + dir; while (j >= 0 && j < arr.length && arr[j].matin === false) j += dir;
+      if (j >= 0 && j < arr.length){ [arr[i], arr[j]] = [arr[j], arr[i]]; save(); render(); orderSheet(); } break; }
+    case "soEUp": case "soEDown": { const t = tour(sub.id); const j = a === "soEUp" ? i-1 : i+1; if (j >= 0 && j < t.etabs.length){ [t.etabs[i], t.etabs[j]] = [t.etabs[j], t.etabs[i]]; linkEtabs(t); save(); render(); orderSheet(); } break; }
     case "addEtab": { e.preventDefault(); const t = tour(sub.id); t.multi = true; t.etabs.push({ id: uid(), nom:"", adresse:"", tel:"", gps:"", horaires:{} }); linkEtabs(t); save(); render(); toast("Établissement ajouté"); break; }
     case "delEtab": { const t = tour(sub.id); if (t.etabs.length < 2) break; pendingEtab = i; confirmSheet(`Retirer ${esc(t.etabs[i].nom || "cet établissement")} ?`, "Les enfants qui y allaient seront rattachés au premier établissement.", "delEtabOk", "Oui, retirer"); break; }
     case "delEtabOk": { const t = tour(sub.id); t.etabs.splice(pendingEtab, 1); linkEtabs(t); save(); closeSheet(); render(); break; }
