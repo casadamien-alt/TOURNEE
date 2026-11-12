@@ -1704,9 +1704,10 @@ function confirmSheet(title, text, act, label){
 }
 
 let editKid = null, editKidIndex = -1;
-let editKidOrig = null;
+let editKidOrig = null, altEditId = null;
 function kidForm(i){
   const t = tour(sub.id);
+  altEditId = null;
   editKidOrig = i >= 0 ? JSON.parse(JSON.stringify(t.enfants[i].contacts || [])) : [];
   editKidIndex = i;
   editKid = i >= 0 ? JSON.parse(JSON.stringify(t.enfants[i])) :
@@ -1748,23 +1749,25 @@ function drawKidForm(){
     <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
     <h3 style="margin-top:16px">🏠 Autres adresses selon le jour</h3>
-    <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b>${x.alterne ? `<button class="btn sm" data-act="altFlip" data-id="${x.id}" title="Inverser semaine A / semaine B">⇄ Inverser les semaines</button>` : ""}<button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
+    <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b>${x.alterne ? `<button class="btn sm" data-act="altFlip" data-id="${x.id}" title="Inverser semaine A / semaine B">⇄ Inverser les semaines</button>` : ""}<button class="btn sm" data-act="altEdit" data-id="${x.id}">✏️</button><button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
       <div class="addr">📍 ${esc(x.adresse)}</div><div class="small" style="margin-top:2px">${altDaysTxt(x)}</div></div>`).join("") || `<p class="small muted" style="margin:0">Aucune : l'enfant est toujours pris et déposé à son adresse principale.</p>`}</div>
-    <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Ajouter une autre adresse</summary>
-      <div class="card" style="margin-top:8px;padding:10px">
-        <label class="f">Nom de l'adresse</label><input class="t" id="alt_lib" placeholder="ex. Chez sa mère">
-        <label class="f">Adresse complète</label>${addrField('id="alt_adr"', "", "Rue, code postal, ville")}
-        ${gpsField('id="alt_gps"', "")}
+    ${(() => { const ea = (e.altAdr||[]).find(x => x.id === altEditId) || null; const on = (arr, d) => ea && (ea[arr]||[]).includes(d) ? "checked" : "";
+      return `<details style="margin-top:8px" ${ea ? "open" : ""}><summary class="btn sm" style="display:inline-flex">${ea ? "✏️ Modifier « " + esc(ea.libelle || "Autre adresse") + " »" : "＋ Ajouter une autre adresse"}</summary>
+      <div class="card" style="margin-top:8px;padding:10px;${ea ? "border:2px solid var(--brand)" : ""}">
+        <label class="f">Nom de l'adresse</label><input class="t" id="alt_lib" placeholder="ex. Chez sa mère" value="${esc(ea?.libelle || "")}">
+        <label class="f">Adresse complète</label>${addrField('id="alt_adr"', ea?.adresse || "", "Rue, code postal, ville")}
+        ${gpsField('id="alt_gps"', ea?.gps || "")}
         <label class="f">Quelles semaines ?</label>
-        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="all" checked> Toutes les semaines</label>
-        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="alt"> Une semaine sur deux, dont la semaine du
-          <input class="t" type="date" id="alt_ref" value="${mondayOf(dayKey(new Date()))}" style="width:auto;padding:6px"></label>
+        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="all" ${ea?.alterne ? "" : "checked"}> Toutes les semaines</label>
+        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="alt" ${ea?.alterne ? "checked" : ""}> Une semaine sur deux, dont la semaine du
+          <input class="t" type="date" id="alt_ref" value="${ea?.alterne ? mondayOf(ea.alterne) : mondayOf(dayKey(new Date()))}" style="width:auto;padding:6px"></label>
         <label class="f">☀️ Ramassage ici le matin, le : <a href="#" class="small" data-act="altAll" data-id="altm">tous</a></label>
-        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}" ${on("matin", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
         <label class="f">🌙 Dépôt ici le soir, le : <a href="#" class="small" data-act="altAll" data-id="alts">tous</a></label>
-        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
-        <button class="btn go w100" style="margin-top:10px" data-act="addAlt">Ajouter cette adresse</button>
-      </div></details>
+        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}" ${on("soir", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <button class="btn go w100" style="margin-top:10px" data-act="addAlt">${ea ? "✔ Enregistrer les modifications de cette adresse" : "Ajouter cette adresse"}</button>
+        ${ea ? `<button class="btn w100" style="margin-top:6px" data-act="altCancel">Annuler la modification</button>` : ""}
+      </div></details>`; })()}
     <h3 style="margin-top:16px">📅 Absences prévues</h3>
     <div id="absList">${(e.absences||[]).filter(x => (x.au || x.du) >= dayKey(new Date())).sort((a,b) => a.du < b.du ? -1 : 1).map(x => `<div class="row card" style="padding:8px 12px;margin:6px 0"><span class="grow small" style="font-weight:700">📅 ${esc(absTxt(x))}</span><button class="btn sm danger" data-act="delAbs" data-id="${x.id}">✖</button></div>`).join("") || `<p class="small muted" style="margin:0">Aucune absence prévue.</p>`}</div>
     <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Prévoir une absence</summary>
@@ -2125,11 +2128,15 @@ document.addEventListener("click", e => {
       const so = [...document.querySelectorAll("[data-alts]:checked")].map(c => Number(c.dataset.alts));
       if (!adr){ toast("Indiquez l'adresse"); break; } if (!m.length && !so.length){ toast("Cochez au moins un jour"); break; }
       const alt = document.querySelector("input[name=alt_wk]:checked")?.value === "alt" ? (document.getElementById("alt_ref").value || dayKey(new Date())) : "";
-      editKid.altAdr = [...(editKid.altAdr||[]), { id: uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt }];
-      drawKidForm(); toast("Adresse ajoutée — pensez à Enregistrer"); break; }
+      const item = { id: altEditId || uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt };
+      const wasEdit = !!altEditId;
+      editKid.altAdr = wasEdit ? (editKid.altAdr||[]).map(x => x.id === altEditId ? item : x) : [...(editKid.altAdr||[]), item];
+      altEditId = null; drawKidForm(); toast((wasEdit ? "Adresse modifiée" : "Adresse ajoutée") + " — pensez à Enregistrer"); break; }
+    case "altEdit": readKidForm(); altEditId = id; drawKidForm(); setTimeout(() => document.getElementById("alt_lib")?.scrollIntoView({ block:"center" }), 50); break;
+    case "altCancel": readKidForm(); altEditId = null; drawKidForm(); break;
     case "altAll": { e.preventDefault(); const boxes = [...document.querySelectorAll(`[data-${id}]`)].filter(c => Number(c.dataset[id]) <= 5); const on = !boxes.every(c => c.checked); boxes.forEach(c => c.checked = on); break; }
     case "altFlip": { readKidForm(); const x = (editKid.altAdr||[]).find(y => y.id === id); if (x && x.alterne){ x.alterne = addDays(mondayOf(x.alterne), 7); drawKidForm(); toast(altWeekOn(x, dayKey(new Date())) ? "Inversé : cette adresse vaut maintenant CETTE semaine — pensez à Enregistrer" : "Inversé : cette adresse vaudra la SEMAINE PROCHAINE — pensez à Enregistrer"); } break; }
-    case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); drawKidForm(); break;
+    case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); if (altEditId === id) altEditId = null; drawKidForm(); break;
     case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
       if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
       editKid.absences = [...(editKid.absences||[]), { id: uid(), du, au: au && au !== du ? au : "", sens: document.getElementById("ab_sens").value, motif: document.getElementById("ab_motif").value.trim() }];
