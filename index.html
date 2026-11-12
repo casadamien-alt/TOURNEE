@@ -482,7 +482,7 @@ function arriveSheet(){
   } else {
     const s = a.steps[ci]; const isKid = s.type === "kid";
     const nom = isKid ? s.kid.prenom : (SE(s, a).nom || "l'établissement");
-    const night = a.sens === "soir";
+    const night = a.sens !== "matin";
     const q = isKid ? `Arrivé chez ${esc(nom)} ?` : `Arrivé à ${esc(nom)} ?`;
     const what = isKid ? (night ? "Enfant déposé" : "Enfant pris en charge") : (night ? "Enfants récupérés" : "Arrivé à l'établissement");
     const com = isKid ? (night ? s.kid.comSoir : s.kid.comMatin) : "";
@@ -550,9 +550,9 @@ function confirmPickup(){
   if (a.sens === "midi"){
     const out = mine.filter(id => !ok.includes(id));
     a.steps.forEach(s => { if (Array.isArray(s.kids)) s.kids = s.kids.filter(id => !out.includes(id)); });
-    a.absents = [...(a.absents||[]), ...out.map(id => kidName(kidById(a, id) || {prenom:"?"}))];
+    a.absents = [...new Set([...(a.absents||[]), ...out.map(id => kidName(kidById(a, id) || {prenom:"?"}))])];
   }
-  a.absents = [...(a.absents||[]), ...absents.map(s => kidName(s.kid))];
+  a.absents = [...new Set([...(a.absents||[]), ...absents.map(s => kidName(s.kid))])];
   if (e && e.type === "etab" && !e.at) e.at = new Date().toISOString();
   closeSheet(); save(); render(); setTimeout(scrollToCurrent, 100);
   toast(`${ok.length} enfant${ok.length > 1 ? "s" : ""} récupéré${ok.length > 1 ? "s" : ""}` + (absents.length ? ` · ${absents.length} absent${absents.length > 1 ? "s" : ""}` : ""));
@@ -667,11 +667,24 @@ function effKid(k, dk, sens){
 }
 function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
 // trajet de midi : récupérer les enfants dans leur(s) établissement(s), puis les déposer à l'établissement d'arrivée
+function midiKid(k){ const c = JSON.parse(JSON.stringify(k)); c.adresse = k.midiAdr; c.gps = ""; c.altLabel = k.midiLib || "adresse du midi"; return c; }
+function midiDestOf(t, k){   // destination du midi : un établissement, ou une autre adresse
+  if (k.midiDest === "adr" && k.midiAdr) return { adr: true };
+  return { etab: t.etabs.find(e => e.id === k.midiDest) || t.etabs.find(e => e.id === t.midiDest) || t.etabs[t.etabs.length - 1] };
+}
 function startMidi(t, kids){
-  const dest = t.etabs.find(e => e.id === t.midiDest) || t.etabs[t.etabs.length - 1];
-  const steps = t.etabs.filter(e => e.id !== dest.id).map(e => ({ type:"etab", pickup:true, etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
-  // enfants dont l'établissement est déjà la destination : rien à récupérer ailleurs
-  steps.push({ type:"etab", pickup:false, etab: JSON.parse(JSON.stringify(dest)), kids: kids.map(k => k.id), at:null });
+  // 1. récupérer les enfants dans leur établissement (sauf s'il est déjà leur destination)
+  const steps = t.etabs.map(e => ({ type:"etab", pickup:true, etab: JSON.parse(JSON.stringify(e)),
+    kids: kids.filter(k => { const d = midiDestOf(t, k); return kidEtab(t, k).id === e.id && !(d.etab && d.etab.id === e.id); }).map(k => k.id), at:null })).filter(x => x.kids.length);
+  // 2. déposer chacun à sa destination, dans l'ordre des enfants (un arrêt par établissement)
+  const seen = {};
+  kids.forEach(k => {
+    const d = midiDestOf(t, k);
+    if (d.adr){ steps.push({ type:"kid", kid: midiKid(k), at:null }); return; }
+    if (kidEtab(t, k).id === d.etab.id) return;   // déjà sur place
+    if (seen[d.etab.id]) seen[d.etab.id].kids.push(k.id);
+    else { seen[d.etab.id] = { type:"etab", pickup:false, etab: JSON.parse(JSON.stringify(d.etab)), kids:[k.id], at:null }; steps.push(seen[d.etab.id]); }
+  });
   S.active = { id: uid(), tourneeId:t.id, tourneeNom:t.nom, etab:{...t.etab}, sens:"midi",
     responsable: {...(t.responsable||{})}, remplace: remplActif(t) ? t.remplacement.nom : "",
     start: new Date().toISOString(), steps, kidsRef: kids.map(k => JSON.parse(JSON.stringify(k))),
@@ -701,7 +714,7 @@ function finishRun(){
   const entry = {
     id: a.id, date: dayKey(a.start), tourneeId: a.tourneeId, tourneeNom: a.tourneeNom, etab: [...new Set(a.steps.filter(s => s.type === "etab").map(s => SE(s, a)?.nom).filter(Boolean))].join(", ") || a.etab?.nom || "",
     sens: a.sens, start: a.start, end, duree: Math.round(minsBetween(a.start, end)),
-    nb: a.sens === "midi" ? (a.steps[a.steps.length-1]?.kids || []).length : a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
+    nb: a.sens === "midi" ? new Set(a.steps.flatMap(s => s.type === "kid" ? [s.kid.id] : (s.pickup ? [] : (s.kids || [])))).size : a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
     remplace: a.remplace || "", responsable: a.responsable?.nom || "",
     etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (SE(s, a)?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
     dernierArret: a.steps[a.steps.length-1]?.at || null,
@@ -1008,10 +1021,11 @@ function renderHome(){
 /* ---------- Préparation : cocher les présents ---------- */
 function prepEtabCards(t){
   if (sub.sens === "midi"){
-    const dest = t.etabs.find(e => e.id === t.midiDest) || t.etabs[t.etabs.length - 1]; const ks = prepKids();
-    const from = t.etabs.filter(e => e.id !== dest.id && ks.some(k => kidEtab(t, k).id === e.id));
-    return from.map(e => `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>1. Récupérer à ${esc(e.nom || "l'établissement")}</b><div class="addr">${esc(e.adresse)}</div></div></div>`).join("")
-      + `<div class="card row" style="background:var(--go-bg)"><span style="font-size:22px">🏁</span><div class="grow"><b>2. Déposer à ${esc(dest.nom || "l'établissement d'arrivée")}</b><div class="addr">${esc(dest.adresse)}</div></div></div>`;
+    const ks = prepKids().filter(k => sub.present.includes(k.id));
+    const from = t.etabs.filter(e => ks.some(k => kidEtab(t, k).id === e.id && !(midiDestOf(t, k).etab?.id === e.id)));
+    const dests = ks.map(k => { const d = midiDestOf(t, k); return `${esc(k.prenom)} → ${d.adr ? "🏠 " + esc(k.midiLib || k.midiAdr) : "🏫 " + esc(d.etab.nom || "Établissement")}`; });
+    return from.map(e => `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>Récupérer à ${esc(e.nom || "l'établissement")}</b><div class="addr">${esc(e.adresse)}</div></div></div>`).join("")
+      + `<div class="card" style="background:var(--go-bg)"><b>🏁 Puis déposer :</b><div class="small" style="margin-top:4px">${dests.join("<br>") || "—"}</div></div>`;
   }
   const list = sub.sens === "soir" ? t.etabs.slice().reverse() : t.etabs;
   return list.map(e => { const h = horaire(e, new Date()); const ref = sub.sens === "matin" ? h.debut : h.fin;
@@ -1058,7 +1072,7 @@ function syncActive(){
   a.steps.forEach(s => {
     if (s.type !== "kid") return;
     const k = t.enfants.find(x => x.id === s.kid.id);
-    const ek = k ? effKid(k, dayKey(a.start), a.sens) : null;
+    const ek = k ? (a.sens === "midi" ? (k.midiDest === "adr" && k.midiAdr ? midiKid(k) : null) : effKid(k, dayKey(a.start), a.sens)) : null;
     if (ek && JSON.stringify(ek) !== JSON.stringify(s.kid)){ s.kid = ek; changed = true; }
   });
   a.steps.forEach(s => {
@@ -1084,7 +1098,7 @@ function validateBtn(i, label){
 function renderRun(){
   if (syncActive()) saveLocal();
   const a = S.active; const ci = curIndex(); const allDone = ci === -1;
-  const night = a.sens === "soir";
+  const night = a.sens !== "matin";
   const remaining = a.steps.filter(s => !s.at).map(s => s.type === "kid" ? nav(s.kid) : nav(SE(s, a)));
   if (S.domicile) remaining.push(S.domicile);   // l'itinéraire se termine à la maison
   const links = mapsLinks(remaining);
@@ -1157,7 +1171,7 @@ function renderRun(){
   return h;
 }
 function contactBlock(k, done, heure, i){
-  const night = S.active?.sens === "soir";
+  const night = S.active?.sens !== "matin";
   const tplKey = done ? (night ? "valideSoir" : "valideMatin") : (night ? "avantSoir" : "avantMatin");
   const msg = fill(S.tpl[tplKey], k, heure);
   const cs = (k.contacts||[]).filter(c => c.tel);
@@ -1254,8 +1268,8 @@ function renderEdit(){
   </div>`).join("")}
   ${t.etabs.length > 1 ? `<div class="card" style="background:#f3faf6;border-color:#bfe3d2"><h3>🕛 Trajet de midi</h3>
     <label class="row" style="font-weight:800"><input type="checkbox" data-tf="midiOn" ${t.midiOn ? "checked" : ""} style="width:22px;height:22px"> Cette tournée a un trajet le midi, d'un établissement à un autre</label>
-    ${t.midiOn ? `<label class="f">Établissement d'arrivée le midi</label><select class="t" data-tf="midiDest">${t.etabs.map(e => `<option value="${e.id}" ${e.id === (t.midiDest || t.etabs[t.etabs.length-1].id) ? "selected" : ""}>${esc(e.nom || "Établissement")}</option>`).join("")}</select>
-      <p class="small muted" style="margin:6px 0 0">Les enfants cochés « Midi » dans leur fiche sont récupérés dans leur établissement puis déposés ici.${t.enfants.some(k => k.midi === true) ? " Concernés : " + t.enfants.filter(k => k.midi === true).map(k => esc(k.prenom)).join(", ") : " <b>Aucun enfant coché « Midi » pour l'instant.</b>"}</p>` : ""}
+    ${t.midiOn ? `<label class="f">Établissement d'arrivée le midi (par défaut)</label><select class="t" data-tf="midiDest">${t.etabs.map(e => `<option value="${e.id}" ${e.id === (t.midiDest || t.etabs[t.etabs.length-1].id) ? "selected" : ""}>${esc(e.nom || "Établissement")}</option>`).join("")}</select>
+      <p class="small muted" style="margin:6px 0 0">Les enfants cochés « Midi » dans leur fiche sont récupérés dans leur établissement puis déposés ici, sauf si leur fiche indique une autre destination (autre établissement ou autre adresse).${t.enfants.some(k => k.midi === true) ? " Concernés : " + t.enfants.filter(k => k.midi === true).map(k => esc(k.prenom)).join(", ") : " <b>Aucun enfant coché « Midi » pour l'instant.</b>"}</p>` : ""}
   </div>` : ""}
   ${t.multi ? `<button class="btn w100" style="margin-bottom:12px" data-act="addEtab">🏫 ＋ Ajouter un autre établissement</button>`
     : `<p class="small" style="margin:-4px 0 12px;text-align:center"><a href="#" data-act="addEtab">Cette tournée dessert finalement plusieurs établissements ?</a></p>`}
@@ -1658,6 +1672,13 @@ function drawKidForm(){
     ${gpsField('id="k_gps"', e.gps)}
     <div class="row"><div class="grow"><label class="f">Heure de ramassage le matin</label><input class="t" type="time" id="k_heure" value="${esc(e.heureMatin)}"></div>
       <div class="grow"><label class="f">Transporté</label><div class="row" style="padding:8px 0"><label class="row"><input type="checkbox" id="k_matin" ${e.matin!==false?"checked":""}> Matin</label>${tour(sub.id)?.midiOn ? `<label class="row" style="margin-left:10px"><input type="checkbox" id="k_midi" ${e.midi===true?"checked":""}> Midi</label>` : ""}<label class="row" style="margin-left:10px"><input type="checkbox" id="k_soir" ${e.soir!==false?"checked":""}> Soir</label></div></div></div>
+    ${(() => { const t = tour(sub.id); if (!t?.midiOn) return "";
+      const def = t.etabs.find(x => x.id === t.midiDest) || t.etabs[t.etabs.length - 1];
+      return `<div class="card" style="padding:10px;background:#f3faf6;border-color:#bfe3d2"><label class="f" style="margin-top:0">🕛 Le midi, je dépose cet enfant :</label>
+        <select class="t" id="k_mdest"><option value="">${esc(def?.nom || "Établissement")} (comme les autres)</option>${t.etabs.filter(x => x.id !== def?.id).map(x => `<option value="${x.id}" ${e.midiDest === x.id ? "selected" : ""}>${esc(x.nom || "Établissement")}</option>`).join("")}<option value="adr" ${e.midiDest === "adr" ? "selected" : ""}>🏠 À une autre adresse…</option></select>
+        <div id="k_madrbox" style="${e.midiDest === "adr" ? "" : "display:none"}"><label class="f">Nom du lieu</label><input class="t" id="k_mlib" value="${esc(e.midiLib || "")}" placeholder="ex. Chez sa grand-mère">
+          <label class="f">Adresse</label>${addrField('id="k_madr"', e.midiAdr || "", "Rue, code postal, ville")}</div>
+        <p class="small muted" style="margin:6px 0 0">Valable seulement si « Midi » est coché ci-dessus.</p></div>`; })()}
     <label class="f">☀️ Mode de ramassage le matin</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
     <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
@@ -1703,6 +1724,7 @@ function readKidForm(){
   e.comMatin = g("k_comMatin"); e.comSoir = g("k_comSoir"); e.note = g("k_note");
   e.matin = document.getElementById("k_matin").checked; e.soir = document.getElementById("k_soir").checked;
   if (document.getElementById("k_midi")) e.midi = document.getElementById("k_midi").checked;
+  if (document.getElementById("k_mdest")){ e.midiDest = document.getElementById("k_mdest").value; e.midiLib = g("k_mlib"); e.midiAdr = g("k_madr"); }
   e.contacts = [...document.querySelectorAll("#contacts [data-ci]")].map(r => ({
     nom: r.querySelector("[data-c=nom]").value.trim(),
     lien: r.querySelector("[data-c=lien]").value === "__autre" ? r.querySelector("[data-c=autre]").value.trim() : r.querySelector("[data-c=lien]").value,
@@ -2181,6 +2203,7 @@ document.addEventListener("change", e => {
     const [ei, d, k] = t.dataset.hor.split("."); const e2 = tour(sub.id).etabs[Number(ei)];
     e2.horaires[d] = Object.assign({debut:"",fin:""}, e2.horaires[d]||{}); e2.horaires[d][k] = t.value; save(); return;
   }
+  if (t.id === "k_mdest"){ document.getElementById("k_madrbox").style.display = t.value === "adr" ? "" : "none"; return; }
   if (t.dataset.etabpick !== undefined && t.value !== ""){
     const tr = tour(sub.id); const ei = Number(t.dataset.etabpick);
     const kn = knownEtabs().filter(x => !tr.etabs.some(y => etabKey(y) === etabKey(x)));
