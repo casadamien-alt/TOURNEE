@@ -266,7 +266,7 @@ function normalize(st){
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
   st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
-  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, midiOn: !!t.midiOn, midiDest: t.midiDest || "",
+  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
     ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
@@ -1002,6 +1002,9 @@ function renderHome(){
     const nm = t.enfants.filter(k => k.matin !== false).length, ns = t.enfants.filter(k => k.soir !== false).length;
     h += `<div class="card">
       <div class="row"><div class="grow"><div class="name">${esc(t.nom)}</div>
+        ${t.dateUnique ? (() => { const td = dayKey(new Date()); const past = t.dateUnique < td;
+          return `<div style="margin:4px 0"><span class="pill" style="background:${past ? "#eee" : "#ffe7d6"};color:${past ? "var(--mute)" : "var(--warn)"}">📅 Occasionnelle : ${t.dateUnique === td ? "aujourd'hui" : dateLong(t.dateUnique)}${past ? " (passée)" : ""}</span>
+            ${past ? `<button class="btn sm danger" style="margin-left:6px" data-act="delTourQuick" data-id="${t.id}">🗑 Supprimer</button>` : ""}</div>`; })() : ""}
         <div class="addr">🏫 ${t.etabs.length > 1 ? esc(t.etabs.map(e => e.nom || "Établissement").join(" · ")) : esc(t.etab.nom || "Établissement")} ${t.etabs.length > 1 ? "" : t.etab.adresse ? "· "+esc(t.etab.adresse) : "<span style='color:var(--warn)'>· adresse à renseigner</span>"}</div>
         <div class="small muted" style="margin-top:4px">${t.enfants.length} enfant${t.enfants.length>1?"s":""}${etabHoraires(t.etab) ? " · "+etabHoraires(t.etab) : ""}</div>
         ${t.responsable?.nom ? `<div class="small muted" style="margin-top:2px">👔 Responsable : ${esc(t.responsable.nom)}${t.responsable.fonction ? " ("+esc(t.responsable.fonction)+")" : ""}</div>` : ""}
@@ -1232,6 +1235,8 @@ function renderEdit(){
   const t = tour(sub.id); if (!t){ sub = null; return renderHome(); }
   let h = `<div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="back">← Retour</button><span class="grow"></span><button class="btn sm go" data-act="saveTour">✅ Valider</button></div>
   <div class="card"><h3>Tournée</h3>
+    <label class="f">📅 Date (seulement si la tournée n'a lieu qu'une fois)</label>
+    <div class="row"><input class="t grow" type="date" data-tf="dateUnique" value="${esc(t.dateUnique || "")}" style="width:auto">${t.dateUnique ? `<button class="btn sm" data-act="clearDateUnique">✖ Tournée habituelle</button>` : ""}</div>
     <label class="f">Nom de la tournée</label><input class="t" data-tf="nom" value="${esc(t.nom)}" placeholder="ex. Circuit IME Les Tilleuls">
   </div>
   <div class="card"><h3>👔 Personne responsable</h3>
@@ -2037,11 +2042,12 @@ document.addEventListener("click", e => {
     case "back": sub = null; render(); window.scrollTo(0,0); break;
     case "newTour": openSheet(`<h2>➕ Nouvelle tournée</h2>
       <label class="f">Nom de la tournée</label><input class="t" id="nt_nom" placeholder="ex. Circuit IME Les Tilleuls">
+      <label class="f">📅 Date précise (seulement si elle n'a lieu qu'une fois)</label><input class="t" type="date" id="nt_date">
       <label class="f">Combien d'établissements ?</label>
       <button class="btn lg" style="margin-top:6px;text-align:left;justify-content:flex-start" data-act="newTourOk" data-id="one">🏫 Un seul établissement<span class="small muted" style="display:block;font-weight:600;margin-left:6px">tous les enfants vont au même endroit</span></button>
       <button class="btn lg" style="margin-top:8px;text-align:left;justify-content:flex-start" data-act="newTourOk" data-id="multi">🏫🏫 Plusieurs établissements<span class="small muted" style="display:block;font-weight:600;margin-left:6px">chaque enfant a son établissement</span></button>
       <button class="btn w100" style="margin-top:12px" data-act="close">Annuler</button>`); setTimeout(() => document.getElementById("nt_nom")?.focus(), 50); break;
-    case "newTourOk": { const nm = (document.getElementById("nt_nom")?.value || "").trim(); const multi = el.dataset.id === "multi"; closeSheet(); const t = { id:uid(), nom: nm || "Tournée " + (S.tournees.length+1), multi, etabs: (multi ? [1,2] : [1]).map(() => ({id:uid(),nom:"",adresse:"",tel:"",horaires:{}})), responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
+    case "newTourOk": { const nm = (document.getElementById("nt_nom")?.value || "").trim(); const dU = document.getElementById("nt_date")?.value || ""; const multi = el.dataset.id === "multi"; closeSheet(); const t = { id:uid(), nom: nm || "Tournée " + (S.tournees.length+1), multi, dateUnique: dU, etabs: (multi ? [1,2] : [1]).map(() => ({id:uid(),nom:"",adresse:"",tel:"",horaires:{}})), responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
     case "saveTour": { const t = tour(sub.id);
       if (!el.dataset.final && t.etabs.length > 1 && t.enfants.length){ orderSheet(); break; }
       if (el.dataset.final) closeSheet();
@@ -2075,7 +2081,11 @@ document.addEventListener("click", e => {
     case "delKidOk": tour(sub.id).enfants.splice(editKidIndex,1); save(); closeSheet(); render(); break;
     case "kUp": case "kDown": { const arr = tour(sub.id).enfants; const j = a === "kUp" ? i-1 : i+1; if (j>=0 && j<arr.length){ [arr[i],arr[j]] = [arr[j],arr[i]]; save(); render(); } break; }
     case "sortTime": { const arr = tour(sub.id).enfants; arr.sort((x,y) => (x.heureMatin||"99:99").localeCompare(y.heureMatin||"99:99")); save(); render(); toast("Trié par heure de ramassage"); break; }
-    case "prep": { const t = tour(id); const s = el.dataset.sens; const ids = eligible(t, s).map(k => k.id); const td = dayKey(new Date());
+    case "prep": { const t = tour(id); const s = el.dataset.sens;
+      if (t.dateUnique && t.dateUnique !== dayKey(new Date()) && !el.dataset.force){
+        openSheet(`<h2>📅 Tournée prévue ${t.dateUnique < dayKey(new Date()) ? "le" : "pour le"} ${dateLong(t.dateUnique)}</h2><p class="muted">Nous sommes ${dateLong(dayKey(new Date()))}. La lancer quand même ?</p>
+          <div class="row"><button class="btn go grow" data-act="prep" data-id="${t.id}" data-sens="${s}" data-force="1">Oui, lancer</button><button class="btn grow" data-act="close">Annuler</button></div>`); break; }
+      closeSheet(); const ids = eligible(t, s).map(k => k.id); const td = dayKey(new Date());
       const prev = eligible(t, s).filter(k => absentPrevu(k, td, s)).map(k => k.id);
       sub = {type:"prep", id, sens:s, present: ids.filter(x => !prev.includes(x)), order: ids.slice(), reorder:false};
       if (prev.length) toast(`${prev.length} absence${prev.length>1?"s":""} prévue${prev.length>1?"s":""} déjà décochée${prev.length>1?"s":""}`); render(); window.scrollTo(0,0); break; }
@@ -2120,6 +2130,9 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "clearDateUnique": tour(sub.id).dateUnique = ""; save(); render(); break;
+    case "delTourQuick": { pendingTourDel = id; const t = tour(id); confirmSheet(`Supprimer « ${esc(t?.nom || "")} » ?`, "Cette tournée occasionnelle est passée. Son historique est conservé.", "delTourQuickOk", "Oui, supprimer"); break; }
+    case "delTourQuickOk": S.tournees = S.tournees.filter(t => t.id !== pendingTourDel); save(); closeSheet(); render(); toast("Tournée supprimée (historique conservé)"); break;
     case "soUp": case "soDown": { const arr = tour(sub.id).enfants; const dir = a === "soUp" ? -1 : 1;
       // saute les enfants qui ne font pas le matin
       let j = i + dir; while (j >= 0 && j < arr.length && arr[j].matin === false) j += dir;
@@ -2176,7 +2189,7 @@ document.addEventListener("click", e => {
       break;
   }
 });
-let pendingDel = null, pendingAbsent = null, pendingEtab = null;
+let pendingDel = null, pendingAbsent = null, pendingEtab = null, pendingTourDel = null;
 
 document.addEventListener("change", e => {
   const t = e.target;
@@ -2218,7 +2231,7 @@ document.addEventListener("change", e => {
     const val = t.type === "checkbox" ? t.checked : t.value.trim();
     let o = tr; for (let x = 0; x < path.length - 1; x++){ const key = /^\d+$/.test(path[x]) ? Number(path[x]) : path[x]; o[key] = o[key] || {}; o = o[key]; }
     o[path[path.length-1]] = val;
-    save(); if (t.type === "checkbox") render(); return;
+    save(); if (t.type === "checkbox" || t.dataset.tf === "dateUnique") render(); return;
   }
   if (t.dataset.setb){ S[t.dataset.setb] = t.checked; save(); toast(t.checked ? "Activé" : "Désactivé"); return; }
   if (t.dataset.set){ S[t.dataset.set] = t.value.trim(); save(); toast("Enregistré ✓"); if (t.dataset.set === "domicile") render(); return; }
