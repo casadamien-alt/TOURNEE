@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ma tournée scolaire</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#f2b705">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ef; --card:#fff; --ink:#1f2a2e; --mute:#6b7478; --line:#e4e0d6;
+  --brand:#f2b705; --brand-ink:#3a2c00; --brand-soft:#fff6d6;
+  --go:#1f7a5a; --go-bg:#e3f3ec; --call:#1d5fd1; --sms:#7a3fd1; --warn:#b4471f; --off:#c9c4b8;
+  --night:#2b3561; --night-soft:#e7e9f6;
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Nunito,system-ui,-apple-system,Segoe UI,sans-serif;font-size:16px}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(88px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;background:var(--brand);color:var(--brand-ink);padding:12px 16px;box-shadow:0 2px 0 rgba(0,0,0,.06)}
+header.night{background:var(--night);color:#fff}
+header h1{margin:0;font-size:20px;font-weight:900;display:flex;align-items:center;gap:8px}
+header .sub{font-size:13px;font-weight:700;opacity:.85;margin-top:2px}
+.status{font-size:12px;opacity:.75;font-weight:700;margin-left:auto}
+main{padding:14px 14px 20px;max-width:720px;margin:0 auto}
+.card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);padding:14px;margin-bottom:12px}
+.muted{color:var(--mute)} .small{font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.btn{border:1px solid var(--line);background:#fff;border-radius:12px;padding:9px 12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.go{background:var(--go);color:#fff;border-color:var(--go)}
+.btn.brand{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.night{background:var(--night);border-color:var(--night);color:#fff}
+.btn.call{color:var(--call)} .btn.sms{color:var(--sms)} .btn.danger{color:var(--warn)}
+.btn.callf{background:var(--call);border-color:var(--call);color:#fff}
+.btn.smsf{background:var(--sms);border-color:var(--sms);color:#fff}
+.btn.sm{padding:6px 10px;font-size:14px;border-radius:10px}
+.btn.lg{padding:15px;font-size:17px;border-radius:14px;width:100%}
+.btn:disabled{opacity:.4;cursor:default}
+.w100{width:100%}
+label.f{display:block;font-size:13px;font-weight:800;color:var(--mute);margin:10px 0 4px}
+input.t,select.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff}
+textarea.t{min-height:64px;resize:vertical}
+h2{margin:0 0 8px;font-size:21px} h3{margin:2px 0 8px;font-size:17px}
+.name{font-weight:900;font-size:18px}
+.addr{font-size:14px;color:var(--mute);margin-top:2px}
+.pill{font-size:12px;font-weight:800;border-radius:999px;padding:2px 9px;background:#eee;white-space:nowrap}
+.pill.m{background:var(--brand-soft);color:#7a5a00} .pill.s{background:var(--night-soft);color:var(--night)}
+.pill.ok{background:var(--go-bg);color:var(--go)}
+.com{font-size:14px;border-radius:10px;padding:7px 10px;margin-top:8px;background:var(--brand-soft)}
+.com.s{background:var(--night-soft)}
+.chk{appearance:none;-webkit-appearance:none;width:34px;height:34px;border-radius:10px;border:2px solid var(--off);background:#fff;flex:none;cursor:pointer;display:grid;place-items:center}
+.chk:checked{background:var(--go);border-color:var(--go)}
+.chk:checked::after{content:"";width:10px;height:17px;border:solid #fff;border-width:0 4px 4px 0;transform:rotate(45deg) translate(-1px,-2px)}
+.pick{display:flex;gap:12px;align-items:center}
+.pick.off{opacity:.5}
+.num{width:30px;height:30px;border-radius:50%;background:var(--ink);color:#fff;display:grid;place-items:center;font-weight:900;font-size:14px;flex:none}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:6}
+.tabs button{flex:1;border:0;background:none;padding:6px;border-radius:12px;font-weight:800;font-size:13px;color:var(--mute);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tabs button .i{font-size:22px;line-height:1}
+.tabs button.on{color:var(--ink);background:var(--brand-soft)}
+.empty{text-align:center;padding:30px 16px}
+.empty .big{font-size:44px}
+.sheet-bg{position:fixed;inset:0;background:rgba(20,25,28,.45);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--bg);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.msgbox{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;white-space:pre-wrap;font-size:14px}
+.toast{pointer-events:none;position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;z-index:30;max-width:90vw;text-align:center}
+.contact{border-top:1px dashed var(--line);padding-top:10px;margin-top:10px}
+.ord{display:flex;flex-direction:column;gap:4px}
+.ord button{width:36px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;font-weight:900}
+.banner{background:var(--go);color:#fff;border-radius:var(--r);padding:14px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+/* tournée en cours */
+.timer{display:flex;gap:10px;align-items:stretch;margin-bottom:12px}
+.timer>div{flex:1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.timer b{display:block;font-size:24px;line-height:1.15}
+.step{position:relative}
+.step.done{background:#f3faf6;border-color:#bfe3d2}
+.step.current{border:2px solid var(--brand);box-shadow:0 4px 16px rgba(242,183,5,.25)}
+.step.night.current{border-color:var(--night);box-shadow:0 4px 16px rgba(43,53,97,.2)}
+.step.later{opacity:.75}
+.validate{display:flex;align-items:center;gap:10px;width:100%;border:2px solid var(--go);background:#fff;color:var(--go);border-radius:14px;padding:12px;font-weight:900;font-size:17px;cursor:pointer;justify-content:center;margin-top:10px}
+.validate{flex-direction:column;gap:2px;text-align:center}
+.arrive{text-align:center;padding:8px 4px 4px}
+.arrive .big{font-size:56px;line-height:1.1}
+.arrive h2{font-size:26px;margin:6px 0 4px}
+.arrive-ok{display:block;width:100%;margin-top:18px;padding:26px 14px;font-size:21px;border-radius:18px;text-align:center}
+.validate.on{background:var(--go);color:#fff}
+.doneline{display:flex;align-items:center;gap:8px;color:var(--go);font-weight:900}
+.mic{position:fixed;right:16px;bottom:calc(96px + env(safe-area-inset-bottom));width:62px;height:62px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:28px;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:7;cursor:pointer}
+.help{position:fixed;left:16px;bottom:calc(96px + env(safe-area-inset-bottom));height:56px;padding:0 18px;border-radius:28px;border:0;background:#d1342f;color:#fff;font-weight:900;font-size:18px;box-shadow:0 6px 18px rgba(209,52,47,.35);z-index:7;cursor:pointer;display:flex;align-items:center;gap:6px}
+body.running main{padding-bottom:90px}
+.helpcard{display:flex;gap:12px;align-items:center}
+.helpcard .who{flex:1;min-width:0}
+.hf{position:fixed;right:16px;bottom:calc(168px + env(safe-area-inset-bottom));height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--line);background:#fff;font-weight:900;font-size:14px;z-index:7;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.12)}
+.hf.on{background:var(--go);color:#fff;border-color:var(--go);animation:pulsego 1.6s infinite}
+@keyframes pulsego{0%{box-shadow:0 0 0 0 rgba(31,122,90,.5)}100%{box-shadow:0 0 0 14px rgba(31,122,90,0)}}
+.micq{position:fixed;right:84px;bottom:calc(104px + env(safe-area-inset-bottom));width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;font-weight:900;font-size:18px;z-index:7;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.12)}
+.mic.on{background:#d1342f;animation:pulse 1.2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(209,52,47,.5)}100%{box-shadow:0 0 0 18px rgba(209,52,47,0)}}
+.heard{position:fixed;left:14px;right:14px;bottom:calc(218px + env(safe-area-inset-bottom));background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;z-index:7;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+/* historique */
+.hist{display:flex;gap:10px;align-items:center;cursor:pointer}
+.hist .d{width:48px;text-align:center;flex:none}
+.hist .d b{display:block;font-size:20px;line-height:1}
+.hist .dur{font-weight:900;font-size:18px;white-space:nowrap}
+.tot{display:flex;gap:10px;margin-bottom:12px}
+.tot>div{flex:1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.tot b{display:block;font-size:22px}
+table.steps{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.steps td{padding:5px 2px;border-top:1px solid var(--line)}
+table.steps td:last-child{text-align:right;font-weight:800}
+input[type=time].tm{border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:#fff;font-weight:800}
+</style>
+</head>
+<body>
+<header id="hdr"></header>
+<main id="main"></main>
+<nav class="tabs" id="tabs">
+  <button data-v="tournees"><span class="i">🚐</span>Tournées</button>
+  <button data-v="historique"><span class="i">🕓</span>Historique</button>
+  <button data-v="reglages"><span class="i">⚙️</span>Réglages</button>
+</nav>
+<div id="voiceRoot"></div>
+<div id="helpRoot"></div>
+<div id="sheetRoot"></div>
+
+<script>
+/* =========================================================
+   Modèle de données
+   ========================================================= */
+const LS_KEY = "tournee-scolaire-v2";
+const LS_HIST = "tournee-scolaire-hist-v2";
+const LIENS = ["Mère","Père","Représentant légal","Tuteur / tutrice","Famille d'accueil","Éducateur / référent","Grand-mère","Grand-père","Grand-parent","Assistante maternelle / nounou","Frère / sœur","Oncle / tante","Voisin(e)"];
+const TYPES_TEL = ["Portable","Fixe","Travail"];
+function contactLabel(c){ return [c.lien || "Contact", c.nom].filter(Boolean).join(" – ") + (c.type && c.type !== "Portable" ? ` (${c.type.toLowerCase()})` : ""); }
+const DEFAULT_TPL = {
+  avantMatin: "Bonjour, c'est {chauffeur}, chauffeur du transport de {enfant}. Je passerai vers {heure}.",
+  valideMatin: "Bonjour, {enfant} est bien monté(e) dans le véhicule à {heure}. Bonne journée ! {chauffeur}",
+  avantSoir: "Bonjour, c'est {chauffeur}. J'arrive avec {enfant} dans une dizaine de minutes.",
+  valideSoir: "Bonjour, {enfant} a bien été déposé(e) à {heure}. Bonne soirée ! {chauffeur}",
+  devant: "Bonjour, je suis devant chez vous pour {enfant}. {chauffeur}"
+};
+const TPL_LABELS = {
+  avantMatin: "Matin – avant le ramassage",
+  valideMatin: "Matin – enfant pris en charge (étape validée)",
+  avantSoir: "Soir – j'arrive bientôt",
+  valideSoir: "Soir – enfant déposé (étape validée)",
+  devant: "« Je suis devant chez vous »"
+};
+function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"" }; }
+
+let S = blankState();
+let H = {};                 // historique : { "2026-11": [entrées] }
+let view = "tournees";      // tournees | historique | reglages
+let sub = null;             // null | {type:"edit", id} | {type:"prep", id, sens, present:[]}
+let histMonth = monthKey(new Date());
+let openHist = null;
+
+/* ---------- utilitaires ---------- */
+function uid(){ return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4); }
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function p2(n){ return String(n).padStart(2,"0"); }
+function dayKey(d){ d = new Date(d); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate()); }
+function monthKey(d){ d = new Date(d); return d.getFullYear()+"-"+p2(d.getMonth()+1); }
+function hm(iso){ if(!iso) return "—"; const d = new Date(iso); return p2(d.getHours())+"h"+p2(d.getMinutes()); }
+function hmInput(iso){ const d = new Date(iso); return p2(d.getHours())+":"+p2(d.getMinutes()); }
+function durTxt(min){ min = Math.max(0, Math.round(min)); const h = Math.floor(min/60), m = min%60; return h ? `${h} h ${p2(m)}` : `${m} min`; }
+function minsBetween(a,b){ return (new Date(b) - new Date(a)) / 60000; }
+const JOURS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
+const MOIS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+function moisTxt(mk){ const [y,m] = mk.split("-").map(Number); return MOIS[m-1]+" "+y; }
+function hTxt(v){ return v ? v.replace(":","h") : ""; }
+const JOURS_LONG = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+function horaire(e, d){ const h = ((e && e.horaires) || {})[new Date(d).getDay()] || {}; return { debut:h.debut||"", fin:h.fin||"" }; }
+function hasHoraires(e){ return Object.values((e && e.horaires)||{}).some(h => h && (h.debut || h.fin)); }
+function etabHoraires(e){ const h = horaire(e, new Date()); return (h.debut||h.fin) ? `🕗 Aujourd'hui ${hTxt(h.debut)||"?"} → ${hTxt(h.fin)||"?"}` : ""; }
+function remplActif(t, dk){
+  const r = t?.remplacement; if (!r || !r.actif || !r.nom) return false;
+  dk = dk || dayKey(new Date());
+  return (!r.du || dk >= r.du) && (!r.au || dk <= r.au);
+}
+function dFr(dk){ return dk ? dk.split("-").reverse().join("/") : ""; }
+// absences prévues : {id, du, au, sens: "both" | "matin" | "soir", motif}
+function absentPrevu(k, dk, sens){
+  return (k.absences||[]).find(x => x.du && dk >= x.du && dk <= (x.au || x.du) && (x.sens === "both" || x.sens === sens)) || null;
+}
+function absTxt(x){
+  const per = x.au && x.au !== x.du ? `du ${dFr(x.du)} au ${dFr(x.au)}` : `le ${dFr(x.du)}`;
+  const tr = x.sens === "matin" ? " · matin" : x.sens === "soir" ? " · soir" : "";
+  return per + tr + (x.motif ? " — " + x.motif : "");
+}
+function tour(id){ return S.tournees.find(t => t.id === id); }
+function kidName(k){ return (k.prenom||"") + (k.nom ? " "+k.nom : ""); }
+
+function telNorm(tel){
+  let t = String(tel||"").replace(/[^\d+]/g,"");
+  if (/^0\d{9}$/.test(t)) t = "+33" + t.slice(1);
+  return t;
+}
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+function smsHref(tel, body){ return "sms:" + telNorm(tel) + (isIOS ? "&" : "?") + "body=" + encodeURIComponent(body); }
+function telHref(tel){ return "tel:" + telNorm(tel); }
+// adresse utilisée pour le GPS : point GPS exact s'il est renseigné, sinon l'adresse
+function nav(o){ return ((o && o.gps) || "").trim() || (o && o.adresse) || ""; }
+function mapsDirUrl(origin, destination, waypoints){
+  const p = new URLSearchParams({ api:"1", travelmode:"driving" });
+  if (origin) p.set("origin", origin);
+  p.set("destination", destination);
+  if (waypoints.length) p.set("waypoints", waypoints.join("|"));
+  return "https://www.google.com/maps/dir/?" + p.toString();
+}
+function mapsLinks(addrs){
+  let pts = addrs.filter(Boolean);
+  pts = pts.filter((a,i) => i === 0 || a.toLowerCase() !== pts[i-1].toLowerCase()); // fratries
+  const out = []; let origin = "";
+  while (pts.length){
+    const chunk = pts.splice(0, 10); const dest = chunk.pop();
+    out.push({ url: mapsDirUrl(origin, dest, chunk), n: chunk.length + 1 });
+    origin = dest;
+  }
+  return out;
+}
+function fill(tpl, kid, heure){
+  return String(tpl||"").replaceAll("{chauffeur}", S.chauffeur || "votre chauffeur")
+    .replaceAll("{enfant}", kid?.prenom || "").replaceAll("{heure}", (heure||"").replace(":","h"));
+}
+
+/* ---------- normalisation / migration ---------- */
+function migrateEtab(e){
+  e = Object.assign({nom:"",adresse:"",tel:"",horaires:{}}, e||{});
+  e.horaires = e.horaires || {};
+  if (!hasHoraires(e) && (e.heureDebut || e.heureFin)) for (let d = 1; d <= 5; d++) e.horaires[d] = { debut:e.heureDebut||"", fin:e.heureFin||"" };
+  delete e.heureDebut; delete e.heureFin;
+  return e;
+}
+function normalize(st){
+  if (!st || typeof st !== "object") return blankState();
+  // migration depuis la 1re version (une seule liste d'enfants)
+  if (Array.isArray(st.children) && !st.tournees){
+    const s1 = st.settings || {};
+    const order = (st.orderAller||[]).concat(st.children.map(c=>c.id).filter(id => !(st.orderAller||[]).includes(id)));
+    const enfants = order.map(id => st.children.find(c => c.id === id)).filter(Boolean).map(c => ({
+      id:c.id, prenom:c.prenom||"", nom:c.nom||"", adresse:c.adresse||"", heureMatin:"",
+      comMatin:c.note||"", comSoir:"", note:"", matin:c.aller!==false, soir:c.retour!==false,
+      contacts:(c.parents||[]).map(p => ({ nom:p.nom||"", lien:"", tel:p.tel||"" }))
+    }));
+    st = { v:2, chauffeur:s1.chauffeur||"", tpl:{...DEFAULT_TPL},
+      tournees: enfants.length || s1.ecole ? [{ id:uid(), nom:"Ma tournée", etab:{ nom:"École", adresse:s1.ecole||"", tel:"" }, enfants }] : [],
+      active:null };
+  }
+  const b = blankState();
+  st = Object.assign(b, st);
+  st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
+  st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
+  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée",
+    responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
+    remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
+    ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etab:migrateEtab(t.etab), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) }));
+  return st;
+}
+
+/* =========================================================
+   Sauvegarde : votre Google Drive (Google Apps Script) + copie sur l'appareil
+   ========================================================= */
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbwmX8rtq4_5tDB2v3gvr1bHI4qOpM9X4gviIE3XadB2VuZ4KWVx81Naiej7Crt-LttG/exec";
+const LS_CODE = "tournee-code-secret", LS_DIRTY = "tournee-a-envoyer", LS_MAJ = "tournee-maj";
+let saveTimer = null, saving = false, dirty = false;
+let pending = new Set(), remoteMaj = {};
+try { pending = new Set(JSON.parse(localStorage.getItem(LS_DIRTY) || "[]")); remoteMaj = JSON.parse(localStorage.getItem(LS_MAJ) || "{}"); } catch(e){}
+dirty = pending.size > 0;
+function code(){ try { return localStorage.getItem(LS_CODE) || ""; } catch(e){ return ""; } }
+function setStatus(t){ const el = document.getElementById("syncStatus"); if (el) el.textContent = t; lastStatus = t; }
+let lastStatus = "";
+function saveLocal(){ try { localStorage.setItem(LS_KEY, JSON.stringify(S)); localStorage.setItem(LS_HIST, JSON.stringify(H)); localStorage.setItem(LS_DIRTY, JSON.stringify([...pending])); localStorage.setItem(LS_MAJ, JSON.stringify(remoteMaj)); } catch(e){} }
+function markDirty(id){ pending.add(id); dirty = true; saveLocal(); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 800); }
+function save(){ saveLocal(); markDirty("tournee"); }
+function saveHist(mk){ markDirty("hist-" + mk); }
+async function flush(){
+  if (saving || !pending.size || !code()) return;
+  saving = true; setStatus("enregistrement…");
+  const ids = [...pending];
+  const snap = {};
+  const ecrire = ids.map(id => { const data = id === "tournee" ? JSON.parse(JSON.stringify(S)) : { items: H[id.slice(5)] || [] }; snap[id] = JSON.stringify(data); return { id, data }; });
+  try {
+    const r = await fetch(ENDPOINT, { method: "POST", body: JSON.stringify({ code: code(), ecrire }) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.erreur || "refus");
+    ids.forEach(id => {
+      if (j.docs[id]) remoteMaj[id] = j.docs[id].maj;
+      // retiré de la file seulement si rien n'a changé pendant l'envoi
+      const now = JSON.stringify(id === "tournee" ? S : { items: H[id.slice(5)] || [] });
+      if (now === snap[id]) pending.delete(id);
+    });
+    dirty = pending.size > 0; saveLocal(); setStatus(pending.size ? "enregistrement…" : "✓ enregistré");
+  } catch(e){ setStatus(String(e.message) === "code" ? "⚠ code secret refusé" : "⚠ hors ligne"); }
+  saving = false;
+  if (pending.size){ clearTimeout(saveTimer); saveTimer = setTimeout(flush, 3000); }
+}
+async function pull(first){
+  if (!code()) return;
+  if (first) setStatus("connexion…");
+  try {
+    const r = await fetch(ENDPOINT + "?code=" + encodeURIComponent(code()) + "&t=" + Date.now());
+    const j = await r.json();
+    if (!j.ok){ setStatus(j.erreur === "code" ? "⚠ code secret refusé" : "⚠ erreur"); if (j.erreur === "code" && first) codeSheet(true); return; }
+    const docs = j.docs || {}; let changed = false;
+    // données principales : on prend la version du Drive si elle a changé et qu'on n'a rien en attente
+    const m = docs.tournee;
+    if (m && m.maj !== remoteMaj.tournee && !pending.has("tournee")){
+      const remote = normalize(m.data);
+      if (remote.tournees.length || remote.active || !S.tournees.length){ S = remote; changed = true; }
+      else save();
+      remoteMaj.tournee = m.maj;
+    } else if (!m && (S.tournees.length || S.active)) save();
+    // historique : union des tournées des deux appareils
+    Object.keys(docs).filter(id => id.startsWith("hist-")).forEach(id => {
+      const mk = id.slice(5); const map = new Map();
+      ((docs[id].data || {}).items || []).forEach(e => map.set(e.id, e));
+      let localOnly = false;
+      (H[mk] || []).forEach(e => { if (!map.has(e.id)){ map.set(e.id, e); localOnly = true; } });
+      const merged = [...map.values()].sort((a,b) => a.start < b.start ? 1 : -1);
+      if (JSON.stringify(merged) !== JSON.stringify(H[mk] || [])){ H[mk] = merged; changed = true; }
+      remoteMaj[id] = docs[id].maj;
+      if (localOnly) saveHist(mk);
+    });
+    Object.keys(H).forEach(mk => { if (!docs["hist-" + mk] && (H[mk] || []).length) saveHist(mk); });
+    saveLocal();
+    if (changed && !document.querySelector(".sheet input, .sheet textarea")) render();
+    setStatus(pending.size ? "enregistrement…" : "✓ synchronisé");
+  } catch(e){ setStatus("⚠ hors ligne"); }
+}
+function codeSheet(wrong){
+  openSheet(`<h2>🔐 Code secret</h2>
+    <p class="muted" style="margin-top:0">${wrong ? "<b style='color:var(--warn)'>Ce code n'est pas le bon.</b> " : ""}Tapez le code secret que vous avez choisi dans Google Apps Script. Il n'est demandé qu'une fois sur cet appareil.</p>
+    <input class="t" id="codeIn" type="password" autocomplete="current-password" placeholder="Votre code secret">
+    <button class="btn go lg" style="margin-top:12px" data-act="codeOk">Valider</button>
+    <p class="small muted">Sans ce code, l'application fonctionne seulement sur cet appareil, sans synchronisation.</p>
+    <button class="btn w100" data-act="close">Plus tard</button>`);
+  setTimeout(() => document.getElementById("codeIn")?.focus(), 50);
+}
+async function connectDb(){
+  if (!code()){ setStatus("non synchronisé"); codeSheet(false); return; }
+  await pull(true);
+  if (pending.size) flush();
+  setInterval(() => { if (!document.hidden && !saving) pull(false); }, 20000);
+}
+// enregistrer tout de suite quand on quitte l'appli (passage à l'autre appareil)
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && dirty){ clearTimeout(saveTimer); flush(); }
+  if (!document.hidden && code()) pull(false);
+  if (!document.hidden && S.active){
+    if (view === "tournees"){ render(); scrollToCurrent(); keepAwake(); }
+  }
+});
+/* ---------- appels et SMS ----------
+   Dans la page hébergée par Claude, un lien tel: / sms: ne peut pas ouvrir l'appli Téléphone ou Messages.
+   Chaque bouton ouvre donc une fiche avec le numéro en grand : appui long → « Appeler » / « Message »,
+   message déjà copié, et WhatsApp en solution directe (lien web qui s'ouvre bien). */
+function fmtTel(t){ const d = String(t).replace(/^\+33/, "0").replace(/\D/g, ""); return d.length === 10 ? d.replace(/(\d{2})(?=\d)/g, "$1 ") : t; }
+function whoByTel(num){
+  const n = telNorm(num);
+  for (const t of S.tournees){
+    if (t.responsable?.tel && telNorm(t.responsable.tel) === n) return `Responsable — ${t.responsable.nom || ""}`;
+    if (t.remplacement?.tel && telNorm(t.remplacement.tel) === n) return `Personne remplacée — ${t.remplacement.nom || ""}`;
+    if (t.etab?.tel && telNorm(t.etab.tel) === n) return t.etab.nom || "Établissement";
+    for (const k of t.enfants) for (const c of (k.contacts||[])) if (c.tel && telNorm(c.tel) === n) return `${contactLabel(c)} (${k.prenom})`;
+  }
+  return "";
+}
+function contactSheet(kind, num, body){
+  const wa = "https://wa.me/" + telNorm(num).replace(/^\+/, "") + (body ? "?text=" + encodeURIComponent(body) : "");
+  const who = whoByTel(num);
+  openSheet(`<div style="text-align:center">
+    <div style="font-size:40px">${kind === "tel" ? "📞" : "💬"}</div>
+    <h2>${kind === "tel" ? "Appeler" : "Envoyer un SMS"}</h2>
+    ${who ? `<div class="muted" style="font-weight:700">${esc(who)}</div>` : ""}
+    <div style="font-size:34px;font-weight:900;letter-spacing:1px;margin:14px 0 6px;user-select:all;-webkit-user-select:all">${esc(fmtTel(num))}</div>
+    <div class="card" style="text-align:left;padding:10px 14px;margin:4px 0 10px;background:var(--brand-soft);border-color:#f0dc9a">
+      <b>👆 Appui long sur le numéro</b>, puis touchez <b>« ${kind === "tel" ? "Appeler" : "Message"} »</b> dans le petit menu.${kind === "sms" ? "<br>Dans Messages, faites un appui long dans la zone de texte → <b>Coller</b> : le message est déjà copié." : ""}</div></div>
+    ${body ? `<div class="msgbox">${esc(body)}</div>
+      <p class="small" style="margin:6px 0 0;color:var(--go);font-weight:800" id="ctCopied">${navigator.clipboard ? "" : ""}</p>
+      <button class="btn w100" style="margin-top:6px" data-act="copy" data-text="${esc(body)}">📋 Copier le message</button>` : ""}
+    <a class="btn w100" style="margin-top:8px;background:#25d366;border-color:#25d366;color:#fff" target="_blank" rel="noopener" href="${esc(wa)}">${kind === "tel" ? "Ouvrir dans WhatsApp" : "Envoyer par WhatsApp"}</a>
+    <button class="btn w100" style="margin-top:8px" data-act="copy" data-text="${esc(fmtTel(num))}">📋 Copier le numéro</button>
+    <button class="btn w100" style="margin-top:8px" data-act="close">Fermer</button>`);
+  if (body){
+    navigator.clipboard?.writeText(body).then(() => { const el = document.getElementById("ctCopied"); if (el) el.textContent = "✓ Message copié : collez-le dans Messages."; }).catch(() => {});
+  }
+}
+document.addEventListener("click", e => {
+  const l = e.target.closest && e.target.closest('a[data-href^="tel:"], a[data-href^="sms:"], a[href^="tel:"], a[href^="sms:"]');
+  if (!l) return;
+  e.preventDefault(); e.stopPropagation();
+  const href = l.getAttribute("data-href") || l.getAttribute("href");
+  location.href = href; return;   // version hors de Claude : ouverture directe de Téléphone / Messages
+  if (href.startsWith("tel:")) return contactSheet("tel", decodeURIComponent(href.slice(4)));
+  const m = href.match(/^sms:([^?&]*)[?&]body=(.*)$/);
+  contactSheet("sms", decodeURIComponent(m ? m[1] : href.slice(4)), m ? decodeURIComponent(m[2]) : "");
+}, true);
+
+/* ---------- retour depuis Google Maps : « Arrivé ? » ---------- */
+let navPending = false;
+document.addEventListener("click", e => {
+  const l = e.target.closest && e.target.closest('a[href*="google.com/maps"]');
+  if (l && S.active) navPending = true;
+}, true);
+function arriveSheet(){
+  const a = S.active; if (!a) return;
+  const ci = curIndex();
+  let h;
+  if (ci < 0){
+    h = `<div class="arrive"><div class="big">🏠</div><h2>Rentré à la maison ?</h2>
+      <button class="btn primary arrive-ok" data-act="finishArr">🏁 Oui, finir la tournée</button>`;
+  } else {
+    const s = a.steps[ci]; const isKid = s.type === "kid";
+    const nom = isKid ? s.kid.prenom : (a.etab.nom || "l'établissement");
+    const night = a.sens === "soir";
+    const q = isKid ? `Arrivé chez ${esc(nom)} ?` : `Arrivé à ${esc(nom)} ?`;
+    const what = isKid ? (night ? "Enfant déposé" : "Enfant pris en charge") : (night ? "Enfants récupérés" : "Arrivé à l'établissement");
+    const com = isKid ? (night ? s.kid.comSoir : s.kid.comMatin) : "";
+    const nt = S.autoNav !== false && !S.modeAuto ? nextTarget(ci) : null;
+    const okInner = `✅ ${what} — valider${nt && nt.adr ? `<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">puis 🧭 navigation vers ${esc(nt.nom)}</span>` : ""}`;
+    h = `<div class="arrive"><div class="big">${isKid ? "🚸" : "🏫"}</div><h2>${q}</h2>
+      ${isKid ? `<div class="addr" style="font-size:16px">📍 ${esc(s.kid.adresse || "")}</div>` : ""}
+      ${com ? `<div class="com ${night?"s":""}" style="font-size:16px;margin-top:10px"><b>${night?"🌙 Dépôt :":"☀️ Ramassage :"}</b> ${esc(com)}</div>` : ""}
+      ${nt && nt.adr
+        ? `<a class="btn go arrive-ok" data-act="validateArr" data-i="${ci}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">${okInner}</a>`
+        : `<button class="btn go arrive-ok" data-act="validateArr" data-i="${ci}">${okInner}</button>`}`;
+  }
+  h += `<button class="btn w100" style="margin-top:12px;padding:14px" data-act="close">Pas encore</button></div>`;
+  openSheet(h);
+}
+/* ---------- soir : liste des enfants confirmée à l'établissement ---------- */
+let pickupIdx = -1;
+function pickupSheet(i){
+  const a = S.active; if (!a) return; pickupIdx = i;
+  const kids = a.steps.filter(s => s.type === "kid" && !s.at);
+  openSheet(`<h2>🏫 Enfants récupérés</h2>
+    <p class="small muted" style="margin-top:0">Décochez les enfants absents. Ils seront retirés de la tournée et notés absents dans l'historique.</p>
+    <div id="pickupList">${kids.map(s => `<label class="card pick" style="cursor:pointer;margin-bottom:8px"><input type="checkbox" class="chk" data-pick="${s.kid.id}" checked>
+      <div class="grow"><div class="name">${esc(kidName(s.kid))}</div><div class="addr">📍 ${esc(s.kid.adresse || "")}</div></div></label>`).join("")}</div>
+    <div id="pickupGo"></div>
+    <button class="btn w100" style="margin-top:8px;padding:14px" data-act="close">Annuler</button>`);
+  updatePickup();
+}
+function pickupChecked(){ return [...document.querySelectorAll("#pickupList [data-pick]")].filter(c => c.checked).map(c => c.dataset.pick); }
+function updatePickup(){
+  const a = S.active; const box = document.getElementById("pickupGo"); if (!a || !box) return;
+  const ok = pickupChecked();
+  const first = a.steps.find(s => s.type === "kid" && !s.at && ok.includes(s.kid.id));
+  const nt = first ? { adr: nav(first.kid), nom: first.kid.prenom } : (S.domicile ? { adr: S.domicile, nom: "la maison" } : null);
+  const label = `✅ Valider : ${ok.length} enfant${ok.length > 1 ? "s" : ""} dans le véhicule`;
+  box.innerHTML = S.autoNav !== false && nt && nt.adr
+    ? `<a class="btn go arrive-ok" data-act="pickupOk" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">${label}<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">puis 🧭 navigation vers ${esc(nt.nom)}</span></a>`
+    : `<button class="btn go arrive-ok" data-act="pickupOk">${label}</button>`;
+}
+function confirmPickup(){
+  const a = S.active; if (!a) return;
+  const ok = pickupChecked();
+  const absents = a.steps.filter(s => s.type === "kid" && !s.at && !ok.includes(s.kid.id));
+  a.steps = a.steps.filter(s => !(s.type === "kid" && !s.at && !ok.includes(s.kid.id)));
+  a.absents = [...(a.absents||[]), ...absents.map(s => kidName(s.kid))];
+  const e = a.steps.find(s => s.type === "etab"); if (e && !e.at) e.at = new Date().toISOString();
+  closeSheet(); save(); render(); setTimeout(scrollToCurrent, 100);
+  toast(`${ok.length} enfant${ok.length > 1 ? "s" : ""} récupéré${ok.length > 1 ? "s" : ""}` + (absents.length ? ` · ${absents.length} absent${absents.length > 1 ? "s" : ""}` : ""));
+  say(stepSpeech(curIndex()));
+}
+
+/* ---------- enfant absent au dernier moment : passer à la suite ---------- */
+function skipSheet(i){
+  const a = S.active; const s = a?.steps[i]; if (!s || s.type !== "kid") return;
+  const k = s.kid;
+  let main;
+  if (S.modeAuto){
+    // itinéraire complet sans cet enfant, à relancer sur l'écran de la voiture
+    const rest = a.steps.filter((x, j) => j !== i && !x.at).map(x => x.type === "kid" ? nav(x.kid) : nav(a.etab));
+    if (S.domicile) rest.push(S.domicile);
+    const l = mapsLinks(rest)[0];
+    main = l ? `<a class="btn go arrive-ok" data-act="absentGo" data-i="${i}" target="_blank" rel="noopener" href="${esc(l.url)}">⏭ Absent — passer à la suite<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">et relancer l'itinéraire sur la voiture</span></a>` : "";
+  } else if (S.autoNav !== false){
+    const nt = nextTarget(i);
+    main = nt && nt.adr ? `<a class="btn go arrive-ok" data-act="absentGo" data-i="${i}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">⏭ Absent — passer à la suite<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">🧭 navigation vers ${esc(nt.nom)}</span></a>` : "";
+  }
+  openSheet(`<div class="arrive"><div class="big">⏭</div><h2>${esc(k.prenom)} absent(e) ?</h2>
+    <p class="muted" style="margin:4px 0 0">L'étape est retirée de la tournée du jour et notée « absent » dans l'historique.</p>
+    ${main || ""}
+    <button class="btn ${main ? "" : "go arrive-ok"} w100" style="margin-top:12px;padding:14px" data-act="absentGo" data-i="${i}">${main ? "Absent, sans relancer la navigation" : "⏭ Absent — passer à la suite"}</button>
+    <button class="btn w100" style="margin-top:8px;padding:14px" data-act="close">Annuler</button></div>`);
+}
+function scrollToCurrent(){
+  const ci = curIndex(); const el = document.getElementById(ci >= 0 ? "step-"+ci : "step-retour");
+  if (el) setTimeout(() => el.scrollIntoView({ behavior:"smooth", block:"center" }), 80);
+}
+let wakeLock = null;
+async function keepAwake(){ try { if (S.active && navigator.wakeLock && !wakeLock){ wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => wakeLock = null); } } catch(e){} }
+function releaseAwake(){ try { wakeLock?.release(); } catch(e){} wakeLock = null; }
+(function loadLocal(){
+  try {
+    const raw = localStorage.getItem(LS_KEY) || localStorage.getItem("tournee-scolaire-v1");
+    if (raw) S = normalize(JSON.parse(raw));
+    const h = localStorage.getItem(LS_HIST); if (h) H = JSON.parse(h) || {};
+  } catch(e){}
+})();
+
+/* =========================================================
+   Tournée en cours
+   ========================================================= */
+function eligible(t, sens){
+  const list = t.enfants.filter(k => sens === "matin" ? k.matin !== false : k.soir !== false);
+  if (sens === "matin") return list;
+  const rev = list.slice().reverse();                        // le soir : ordre inverse du matin…
+  if (!Array.isArray(t.ordreSoir) || !t.ordreSoir.length) return rev;
+  const pos = id => { const p = t.ordreSoir.indexOf(id); return p < 0 ? 1e6 + rev.findIndex(k => k.id === id) : p; };
+  return rev.sort((a,b) => pos(a.id) - pos(b.id));          // …ou ordre du soir personnalisé
+}
+function prepKids(){ const t = tour(sub.id); const all = eligible(t, sub.sens); return sub.order.map(id => all.find(k => k.id === id)).filter(Boolean); }
+function saveOrderPermanent(t, sens, ids){
+  if (sens === "soir"){ t.ordreSoir = ids.slice(); return; }
+  // matin : on replace les enfants concernés dans les mêmes positions, dans le nouvel ordre
+  const slots = []; t.enfants.forEach((k, i) => { if (ids.includes(k.id)) slots.push(i); });
+  const byId = Object.fromEntries(t.enfants.map(k => [k.id, k]));
+  ids.forEach((id, n) => { t.enfants[slots[n]] = byId[id]; });
+}
+function startRun(){
+  const t = tour(sub.id); const sens = sub.sens;
+  const kids = prepKids().filter(k => sub.present.includes(k.id));
+  if (!kids.length){ toast("Cochez au moins un enfant"); return; }
+  const steps = kids.map(k => ({ type:"kid", kid:JSON.parse(JSON.stringify(k)), at:null }));
+  if (sens === "matin") steps.push({ type:"etab", at:null });
+  else steps.unshift({ type:"etab", at:null });   // le soir : départ de chez soi, 1re étape = l'établissement
+  S.active = {
+    id: uid(), tourneeId:t.id, tourneeNom:t.nom, etab:{...t.etab}, sens,
+    responsable: {...(t.responsable||{})}, remplace: remplActif(t) ? t.remplacement.nom : "",
+    start: new Date().toISOString(), steps,
+    absents: eligible(t, sens).filter(k => !sub.present.includes(k.id)).map(k => kidName(k))
+  };
+  if (S.next && S.next.tourneeId === t.id && S.next.sens === sens) S.next = null;
+  sub = null; save(); render(); window.scrollTo(0,0); keepAwake();
+  toast("Tournée lancée à " + hm(S.active.start));
+}
+function etabRef(a){ const h = horaire(a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
+function curIndex(){ const a = S.active; return a ? a.steps.findIndex(s => !s.at) : -1; }
+function validateStep(i, fromVoice){
+  const a = S.active; const s = a.steps[i]; if (!s) return;
+  s.at = s.at ? null : new Date().toISOString();
+  save(); render();
+  if (s.at && !fromVoice) say(stepSpeech(curIndex()));
+  if (s.at){
+    focusKidStep = s.type === "kid" ? i : null;
+    toast((s.type === "kid" ? s.kid.prenom : "Établissement") + " validé à " + hm(s.at));
+    setTimeout(() => document.getElementById("step-"+i)?.scrollIntoView({behavior:"smooth", block:"start"}), 60);
+    if (curIndex() === -1) setTimeout(() => document.getElementById("step-retour")?.scrollIntoView({behavior:"smooth", block:"center"}), 900);
+  }
+}
+let focusKidStep = null;
+let lastEntry = null;
+function finishRun(){
+  const a = S.active; if (!a) return;
+  const end = new Date().toISOString();
+  const entry = {
+    id: a.id, date: dayKey(a.start), tourneeId: a.tourneeId, tourneeNom: a.tourneeNom, etab: a.etab?.nom || "",
+    sens: a.sens, start: a.start, end, duree: Math.round(minsBetween(a.start, end)),
+    nb: a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
+    remplace: a.remplace || "", responsable: a.responsable?.nom || "",
+    etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (a.etab?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
+    dernierArret: a.steps[a.steps.length-1]?.at || null,
+    retour: a.steps[a.steps.length-1]?.at ? Math.round(minsBetween(a.steps[a.steps.length-1].at, end)) : null
+  };
+  lastEntry = entry;
+  const mk = monthKey(a.start);
+  H[mk] = [entry, ...(H[mk]||[])];
+  S.active = null; save(); saveHist(mk);
+  focusKidStep = null; runReorder = false; handsFree = false; hfPaused = false; stopVoice(); releaseAwake();
+  openSheet(`<div style="text-align:center"><div style="font-size:52px">🏁</div><h2>Tournée terminée</h2>
+    <p class="muted">${esc(entry.tourneeNom)} · ${entry.sens === "matin" ? "☀️ matin" : "🌙 soir"}</p>
+    <div class="timer"><div><span class="small muted">Début</span><b>${hm(entry.start)}</b></div><div><span class="small muted">Fin</span><b>${hm(entry.end)}</b></div><div><span class="small muted">Durée</span><b>${durTxt(entry.duree)}</b></div></div>
+    <p class="small muted">Enregistrée dans l'onglet Historique.</p></div>
+    ${proposalHtml(entry)}`);
+  render();
+}
+
+/* =========================================================
+   Prochaine tournée & agenda
+   ========================================================= */
+function addDays(dk, n){ const d = new Date(dk+"T12:00:00"); d.setDate(d.getDate()+n); return dayKey(d); }
+function dateLong(dk){ const d = new Date(dk+"T12:00:00"); return `${JOURS_LONG[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`; }
+function dateRel(dk){ const t = dayKey(new Date()); if (dk === t) return "aujourd'hui"; if (dk === addDays(t,1)) return "demain"; return dateLong(dk); }
+function isSchoolDay(t, dk){
+  const d = new Date(dk+"T12:00:00").getDay();
+  if (t && hasHoraires(t.etab)){ const h = horaire(t.etab, dk+"T12:00:00"); return !!(h.debut || h.fin); }
+  return d !== 0 && d !== 6;
+}
+function nextSchoolDay(t, fromDk){ let dk = fromDk; for (let i = 0; i < 14; i++){ dk = addDays(dk, 1); if (isSchoolDay(t, dk)) return dk; } return addDays(fromDk, 1); }
+function defaultHeure(t, sens, dk){
+  if (!t) return sens === "matin" ? "07:30" : "16:30";
+  const h = horaire(t.etab, dk+"T12:00:00");
+  if (sens === "soir"){
+    const fin = h.fin || "16:30";
+    // temps moyen entre le départ de chez vous et l'arrivée à l'établissement (historique), sinon 30 min
+    const appro = Object.values(H).flat().filter(e => e.tourneeId === t.id && e.sens === "soir" && e.etapes?.[0]?.at).slice(0,5)
+      .map(e => minsBetween(e.start, e.etapes[0].at)).filter(m => m > 0 && m < 180);
+    const m = toMinutes(fin) - (appro.length ? Math.round(appro.reduce((a,b)=>a+b,0)/appro.length) + 5 : 30);
+    return p2(Math.floor(m/60)) + ":" + p2(m%60);
+  }
+  const times = t.enfants.filter(k => k.matin !== false && k.heureMatin).map(k => k.heureMatin).sort();
+  if (times.length) return times[0];
+  if (h.debut){ const m = toMinutes(h.debut) - 60; return p2(Math.floor(m/60))+":"+p2(m%60); }
+  return "07:30";
+}
+function toMinutes(v){ const [a,b] = v.split(":").map(Number); return a*60+b; }
+function estDuree(n){
+  const items = Object.values(H).flat().filter(e => e.tourneeId === n.tourneeId && e.sens === n.sens).sort((a,b) => a.start < b.start ? 1 : -1).slice(0,5);
+  if (items.length) return Math.max(15, Math.round(items.reduce((s,e) => s+(e.duree||0), 0) / items.length));
+  const t = tour(n.tourneeId); const h = t ? horaire(t.etab, n.date+"T12:00:00") : {};
+  if (n.sens === "matin" && h.debut && toMinutes(h.debut) > toMinutes(n.heure)) return toMinutes(h.debut) - toMinutes(n.heure);
+  return 60;
+}
+function gcalStamp(dk, minutes){ const d = new Date(dk+"T00:00:00"); d.setMinutes(minutes); return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+"T"+p2(d.getHours())+p2(d.getMinutes())+"00"; }
+function gcalUrl(n){
+  const t = tour(n.tourneeId); const start = toMinutes(n.heure); const dur = estDuree(n);
+  const kids = t ? eligible(t, n.sens) : [];
+  const loc = n.sens === "matin" ? (kids[0]?.adresse || t?.etab.adresse || "") : (t?.etab.adresse || "");
+  const details = `Tournée du ${n.sens} – ${t?.etab.nom || ""}\nEnfants : ${kids.map(k => k.prenom).join(", ")}\n\n🔔 Alertes souhaitées : 1 h et 30 min avant.`;
+  const p = new URLSearchParams({ action:"TEMPLATE", text:`🚐 Tournée ${n.sens === "matin" ? "du matin" : "du soir"} – ${t?.nom || ""}`,
+    dates: gcalStamp(n.date, start) + "/" + gcalStamp(n.date, start + dur), ctz:"Europe/Paris", details, location: loc });
+  return "https://calendar.google.com/calendar/render?" + p.toString();
+}
+function proposalHtml(e){
+  const t = tour(e.tourneeId);
+  let q, sens, dk;
+  if (e.sens === "matin"){ sens = "soir"; dk = e.date; const fin = t ? horaire(t.etab, e.date+"T12:00:00").fin : "";
+    q = `Faites-vous la tournée du soir aujourd'hui ?`; if (fin) q += `<div class="small muted" style="margin-top:4px">Fin des cours aujourd'hui : ${hTxt(fin)}</div>`; }
+  else { sens = "matin"; dk = nextSchoolDay(t, e.date); q = `Faites-vous la tournée de ${dateRel(dk)} matin ?`; }
+  return `<div class="card" style="text-align:center;border:2px solid var(--brand)"><h3 style="margin-bottom:12px">${q}</h3>
+    <div class="row"><button class="btn go grow" data-act="planYes" data-sens="${sens}" data-date="${dk}">✅ Oui</button>
+    <button class="btn grow" data-act="planNo" data-date="${dk}" data-sens="${sens}">✖ Non</button></div>
+    <button class="btn sm" style="margin-top:10px" data-act="close">Je ne sais pas encore</button></div>`;
+}
+function planForm(def){
+  const tid = def.tourneeId || S.tournees[0]?.id;
+  openSheet(`<h2>📅 Quand est votre prochaine tournée ?</h2>
+    <label class="f">Tournée</label><select class="t" id="pf_t">${S.tournees.map(t => `<option value="${t.id}" ${t.id===tid?"selected":""}>${esc(t.nom)}</option>`).join("")}</select>
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pf_d" value="${def.date}"></div>
+      <div class="grow"><label class="f">Matin ou soir</label><select class="t" id="pf_s"><option value="matin" ${def.sens==="matin"?"selected":""}>☀️ Matin</option><option value="soir" ${def.sens==="soir"?"selected":""}>🌙 Soir</option></select></div></div>
+    <label class="f">Heure de début de la tournée</label><input class="t" type="time" id="pf_h" value="${def.heure || defaultHeure(tour(tid), def.sens, def.date)}">
+    <p class="small muted" id="pf_info"></p>
+    <button class="btn go lg" data-act="planSave" style="margin-top:8px">Enregistrer et ajouter à mon agenda</button>
+    <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
+  updatePlanInfo();
+}
+function updatePlanInfo(recalc){
+  const t = tour(document.getElementById("pf_t")?.value); if (!t) return;
+  const dk = document.getElementById("pf_d").value, sens = document.getElementById("pf_s").value;
+  if (recalc) document.getElementById("pf_h").value = defaultHeure(t, sens, dk);
+  const h = dk ? horaire(t.etab, dk+"T12:00:00") : {};
+  document.getElementById("pf_info").textContent = dk ? `${dateLong(dk)} – ${t.etab.nom || "établissement"} : ` + ((h.debut||h.fin) ? `cours ${hTxt(h.debut)||"?"} → ${hTxt(h.fin)||"?"}` : "pas d'horaires de cours ce jour-là") : "";
+}
+function setNext(n){ if (S.next && S.next.event && S.next.date === n.date && S.next.heure === n.heure) n.event = S.next.event; S.next = n; save(); render(); agendaSheet(n); }
+function eventData(n){
+  const t = tour(n.tourneeId); const st = toMinutes(n.heure); const dur = estDuree(n);
+  const kids = t ? eligible(t, n.sens) : [];
+  const iso = m => { const d = new Date(n.date+"T00:00:00"); d.setMinutes(m); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+"T"+p2(d.getHours())+":"+p2(d.getMinutes())+":00"; };
+  return {
+    summary: `🚐 Tournée ${n.sens === "matin" ? "du matin" : "du soir"} – ${t?.nom || ""}`,
+    startTime: iso(st), endTime: iso(st + dur),
+    location: n.sens === "matin" ? (kids[0]?.adresse || t?.etab.adresse || "") : (t?.etab.adresse || ""),
+    description: `Tournée du ${n.sens} – ${t?.etab.nom || ""}\nEnfants : ${kids.map(k => k.prenom).join(", ")}`,
+    overrideReminders: [{ method:"popup", minutes:60 }, { method:"popup", minutes:30 }]
+  };
+}
+let mcpNs = null, calBusy = false;
+async function createCalEvent(){
+  const n = S.next; if (!n || calBusy) return;
+  const out = document.getElementById("calMsg");
+  const say = (html, ok) => { if (out){ out.innerHTML = html; out.style.color = ok ? "var(--go)" : "var(--warn)"; } };
+  if (!mcpNs){ say("La connexion à Google Agenda n'est pas disponible ici : utilisez le lien ci-dessous."); return; }
+  calBusy = true; say("Création de l'événement…", true);
+  try {
+    await mcpNs.callTool("Google Calendar", "create_event", eventData(n));
+    n.event = n.date + " " + n.heure; save(); calBusy = false;
+    agendaSheet(n); toast("Événement créé ✓");
+  } catch(e){
+    calBusy = false;
+    const c = e?.code;
+    if (c === "server_not_connected") say("Google Agenda n'est pas connecté à votre compte Claude (claude.ai → Paramètres → Connecteurs). En attendant, utilisez le lien ci-dessous.");
+    else if (c === "needs_reauth") say("La connexion à Google Agenda a expiré : reconnectez-la dans claude.ai → Paramètres → Connecteurs.");
+    else if (c === "approval_required" || c === "not_in_manifest" || c === "consent_required") say("Il faut autoriser cette page à utiliser Google Agenda. Ouvrez l'application dans claude.ai et touchez à nouveau le bouton pour accepter.");
+    else if (c === "tool_error") say("Google Agenda a refusé l'événement : " + esc(e.message || ""));
+    else say("Pas de réponse claire de Google Agenda : l'événement a peut-être été créé. Vérifiez votre agenda avant de réessayer.");
+  }
+}
+function agendaSheet(n){
+  const t = tour(n.tourneeId);
+  const done = n.event === n.date + " " + n.heure;
+  openSheet(`<div style="text-align:center"><div style="font-size:46px">📅</div><h2>Prochaine tournée</h2>
+    <p style="font-weight:900;font-size:18px;margin:4px 0">${n.sens === "matin" ? "☀️" : "🌙"} ${dateRel(n.date)} ${n.sens} · ${hTxt(n.heure)}</p>
+    <p class="muted" style="margin-top:0">${esc(t?.nom || "")}</p></div>
+    ${done ? `<div class="card" style="background:var(--go-bg);border-color:#bfe3d2;text-align:center"><b style="color:var(--go)">✔ Événement créé dans votre Google Agenda</b><div class="small muted" style="margin-top:4px">avec alertes 1 h et 30 min avant</div></div>`
+      : mcpNs ? `<button class="btn go lg" data-act="calCreate">📅 Créer dans mon Google Agenda<br><span class="small" style="font-weight:700">alertes 1 h et 30 min avant</span></button>` : ""}
+    <p class="small" id="calMsg" style="font-weight:700;text-align:center"></p>
+    ${done ? "" : `<a class="btn w100" style="margin-top:4px" target="_blank" rel="noopener" href="${esc(gcalUrl(n))}">${mcpNs ? "Autre solution : ouvrir Google Agenda" : "📅 Ajouter à Google Agenda"}</a>
+    <p class="small muted">Avec ce lien, les alertes ne sont pas réglées automatiquement : touchez « Ajouter une notification » et choisissez 1 heure puis 30 minutes avant.</p>`}
+    <button class="btn w100" style="margin-top:8px" data-act="close">Fermer</button>`);
+}
+
+/* =========================================================
+   Contacts des familles → Google Contacts
+   ========================================================= */
+const COURT = { "Mère":"Maman", "Père":"Papa", "Grand-mère":"Mamie", "Grand-père":"Papi", "Assistante maternelle / nounou":"Nounou", "Frère / sœur":"Frère Sœur", "Oncle / tante":"Oncle Tante", "Représentant légal":"Représentant", "Tuteur / tutrice":"Tuteur", "Famille d'accueil":"Famille accueil", "Éducateur / référent":"Éducateur", "Grand-parent":"Grand-parent" };
+function contactRows(){
+  const rows = []; const seen = new Set();
+  const kids = S.tournees.flatMap(t => t.enfants.map(k => ({ k, t })));
+  const prenomCount = {}; kids.forEach(({k}) => { const p = (k.prenom||"").toLowerCase(); prenomCount[p] = (prenomCount[p]||0) + 1; });
+  kids.forEach(({k, t}) => {
+    const base = k.prenom + ((prenomCount[(k.prenom||"").toLowerCase()] > 1 && k.nom) ? " " + k.nom : "");
+    (k.contacts||[]).filter(c => c.tel).forEach(c => {
+      let role = COURT[c.lien] || c.nom || c.lien || "Contact";
+      let name = base + " " + role;
+      if (seen.has(name.toLowerCase()) && c.nom) name = base + " " + role + " " + c.nom;
+      let i = 2; const n0 = name; while (seen.has(name.toLowerCase())) name = n0 + " " + i++;
+      seen.add(name.toLowerCase());
+      rows.push({ name, tel: c.tel, note: `Transport scolaire – ${t.nom}${c.nom ? " – " + c.nom : ""}${c.lien ? " (" + c.lien + ")" : ""} – enfant : ${kidName(k)}` });
+    });
+  });
+  return rows;
+}
+function contactsCsv(){
+  const q = v => '"' + String(v).replace(/"/g,'""') + '"';
+  const lines = ["First Name,Last Name,Phone 1 - Label,Phone 1 - Value,Notes,Labels"];
+  contactRows().forEach(r => lines.push([q(r.name), q(""), q("Mobile"), q(r.tel), q(r.note), q("* myContacts ::: Transport scolaire")].join(",")));
+  return lines.join("\r\n");
+}
+let dlNs = null;
+async function exportContacts(){
+  const rows = contactRows();
+  if (!rows.length){ toast("Aucun numéro de famille enregistré"); return; }
+  const csv = "﻿" + contactsCsv();
+  if (!dlNs){ downloadBlob(new Blob([csv], { type:"text/csv" }), "contacts-transport-scolaire.csv"); toast("Fichier enregistré dans vos téléchargements ✓"); return; }
+  if (dlNs){
+    try { await dlNs.save({ filename:"contacts-transport-scolaire.csv", data: csv }); toast("Fichier enregistré ✓"); return; }
+    catch(e){ if (e?.code === "declined") return; }
+  }
+  copyText(contactsCsv());
+}
+
+/* =========================================================
+   Rendu
+   ========================================================= */
+function render(){
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.v === view));
+  const a = S.active;
+  const hdr = document.getElementById("hdr");
+  const night = view === "tournees" && a && a.sens === "soir";
+  hdr.className = night ? "night" : "";
+  let title = "🚐 Ma tournée", subt = "";
+  if (view === "tournees" && a){ title = (a.sens === "matin" ? "☀️ " : "🌙 ") + esc(a.tourneeNom); subt = "Tournée en cours"; }
+  else if (view === "tournees" && sub?.type === "prep"){ const t = tour(sub.id); title = (sub.sens === "matin" ? "☀️ " : "🌙 ") + esc(t?.nom); subt = "Qui est présent ?"; }
+  else if (view === "tournees" && sub?.type === "edit"){ title = "✏️ " + esc(tour(sub.id)?.nom || "Tournée"); }
+  else if (view === "historique") title = "🕓 Historique";
+  else if (view === "reglages") title = "⚙️ Réglages";
+  hdr.innerHTML = `<h1>${title}<span class="status" id="syncStatus">${esc(lastStatus)}</span></h1>${subt ? `<div class="sub">${subt}</div>` : ""}`;
+  const m = document.getElementById("main");
+  if (view === "tournees"){
+    if (a) m.innerHTML = renderRun();
+    else if (sub?.type === "prep") m.innerHTML = renderPrep();
+    else if (sub?.type === "edit") m.innerHTML = renderEdit();
+    else m.innerHTML = renderHome();
+  }
+  if (view === "historique") m.innerHTML = renderHist();
+  if (view === "reglages") m.innerHTML = renderReglages();
+  renderVoice();
+  renderHelp();
+  refreshAddrList();
+}
+function helpPeople(){
+  const a = S.active; if (!a) return [];
+  const t = tour(a.tourneeId);
+  const resp = (t && t.responsable) || a.responsable || {};
+  const out = [];
+  if (resp.tel || resp.nom) out.push({ role:"👔 Personne responsable", nom: resp.nom, detail: resp.fonction, tel: resp.tel });
+  const r = t?.remplacement;
+  if (r && r.actif && r.nom && (a.remplace || remplActif(t))) out.push({ role:"🔁 Personne remplacée", nom: r.nom, detail:"", tel: r.tel });
+  return out;
+}
+function renderHelp(){
+  document.body.classList.toggle("running", !!S.active);
+  document.getElementById("helpRoot").innerHTML = S.active ? `<button class="help" data-act="help" aria-label="Aide">🆘 Help</button>` : "";
+}
+function helpSheet(){
+  const ppl = helpPeople();
+  let h = `<h2>🆘 Besoin d'aide ?</h2>`;
+  if (!ppl.length) h += `<div class="card"><p class="muted" style="margin:0">Aucune personne à contacter pour cette tournée.<br>Ajoutez la personne responsable (et la personne remplacée s'il s'agit d'un remplacement) dans ✏️ Modifier la tournée.</p></div>`;
+  ppl.forEach(p => {
+    h += `<div class="card helpcard"><div class="who"><div class="small muted" style="font-weight:800">${p.role}</div>
+        <div class="name">${esc(p.nom || "—")}</div>${p.detail ? `<div class="small muted">${esc(p.detail)}</div>` : ""}
+        ${p.tel ? `<div class="small" style="margin-top:2px">${esc(p.tel)}</div>` : `<div class="small" style="color:var(--warn);font-weight:700">Pas de numéro enregistré</div>`}</div>
+      ${p.tel ? `<a class="btn callf" style="padding:16px 18px;font-size:17px" data-href="${esc(telHref(p.tel))}">📞 Appeler</a>` : ""}</div>`;
+  });
+  h += `<button class="btn w100" data-act="close">Fermer</button>`;
+  openSheet(h);
+}
+
+/* ---------- Accueil : liste des tournées ---------- */
+function renderHome(){
+  let h = "";
+  if (!S.tournees.length){
+    return `<div class="card empty"><div class="big">🚐</div><h3>Créez votre première tournée</h3>
+      <p class="muted">Une tournée regroupe un établissement (école, IME…) et les enfants à ramasser, dans l'ordre du matin.</p>
+      <button class="btn brand" data-act="newTour">➕ Nouvelle tournée</button></div>`;
+  }
+  const today = new Date();
+  if (S.next && S.next.date < dayKey(today)) S.next = null;
+  if (!S.domicile){
+    h += `<div class="card" style="border:2px solid var(--go)"><div class="row"><span style="font-size:26px">🏠</span><div class="grow"><b>Votre adresse de domicile</b>
+      <div class="small muted">Chaque tournée se terminera chez vous, après le dernier arrêt. À indiquer une seule fois.</div></div></div>
+      ${addrField('data-set="domicile"', "", "Votre adresse, code postal, ville")}</div>`;
+  }
+  if (S.next){ const n = S.next; const nt = tour(n.tourneeId);
+    h += `<div class="card" style="border:2px solid ${n.sens==="matin"?"var(--brand)":"var(--night)"}"><div class="row">
+      <span style="font-size:28px">📅</span><div class="grow"><div class="small muted" style="font-weight:800">Prochaine tournée</div>
+      <div style="font-weight:900;font-size:17px">${(d => d[0].toUpperCase()+d.slice(1))(dateRel(n.date))} ${n.sens === "matin" ? "☀️ matin" : "🌙 soir"} · ${hTxt(n.heure)}</div>
+      <div class="small muted">${esc(nt?.nom || "")}</div></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn sm" data-act="agendaNext">📅 Agenda</button><button class="btn sm" data-act="editNext">✏️ Modifier</button><button class="btn sm danger" data-act="clearNext">✖ Effacer</button></div></div>`; }
+  h += `<p class="muted small" style="margin:0 0 10px;font-weight:700">${JOURS[today.getDay()]} ${today.getDate()} ${MOIS[today.getMonth()]} — choisissez la tournée à lancer</p>`;
+  S.tournees.forEach(t => {
+    const nm = t.enfants.filter(k => k.matin !== false).length, ns = t.enfants.filter(k => k.soir !== false).length;
+    h += `<div class="card">
+      <div class="row"><div class="grow"><div class="name">${esc(t.nom)}</div>
+        <div class="addr">🏫 ${esc(t.etab.nom || "Établissement")} ${t.etab.adresse ? "· "+esc(t.etab.adresse) : "<span style='color:var(--warn)'>· adresse à renseigner</span>"}</div>
+        <div class="small muted" style="margin-top:4px">${t.enfants.length} enfant${t.enfants.length>1?"s":""}${etabHoraires(t.etab) ? " · "+etabHoraires(t.etab) : ""}</div>
+        ${t.responsable?.nom ? `<div class="small muted" style="margin-top:2px">👔 Responsable : ${esc(t.responsable.nom)}${t.responsable.fonction ? " ("+esc(t.responsable.fonction)+")" : ""}</div>` : ""}
+        ${t.remplacement?.actif && t.remplacement.nom ? `<div class="small" style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">🔁 Remplacement de ${esc(t.remplacement.nom)}${t.remplacement.du||t.remplacement.au ? ` · ${t.remplacement.du?"du "+dFr(t.remplacement.du):""}${t.remplacement.au?" au "+dFr(t.remplacement.au):""}` : ""}${remplActif(t) ? "" : " (hors période)"}</span></div>` : ""}</div>
+        <button class="btn sm" data-act="editTour" data-id="${t.id}">✏️ Modifier</button></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn brand grow" data-act="prep" data-id="${t.id}" data-sens="matin" ${nm?"":"disabled"}>☀️ Lancer le matin</button>
+        <button class="btn night grow" data-act="prep" data-id="${t.id}" data-sens="soir" ${ns?"":"disabled"}>🌙 Lancer le soir</button>
+      </div></div>`;
+  });
+  h += `<button class="btn w100" data-act="planOpen" style="margin-top:4px">📅 Planifier ma prochaine tournée</button>`;
+  h += `<button class="btn w100" data-act="newTour" style="margin-top:8px">➕ Nouvelle tournée</button>`;
+  return h;
+}
+
+/* ---------- Préparation : cocher les présents ---------- */
+function renderPrep(){
+  const t = tour(sub.id); const kids = prepKids();
+  const usual = eligible(t, sub.sens).map(k => k.id).join(); const changed = sub.order.join() !== usual;
+  let h = `<div class="card"><div class="row"><span class="grow small muted" style="font-weight:700">${sub.present.length} présent${sub.present.length>1?"s":""} sur ${kids.length}</span>
+      <button class="btn sm" data-act="prepAll">✅ Tous</button><button class="btn sm" data-act="prepNone">⬜ Aucun</button></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm ${sub.reorder?"primary":""}" data-act="prepReorder">↕️ ${sub.reorder?"Terminer l'ordre":"Changer l'ordre"}</button>
+        ${changed ? `<span class="pill" style="background:#ffe7d6;color:var(--warn)">ordre modifié pour aujourd'hui</span>` : ""}</div>
+      ${changed ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="prepKeep">💾 Garder cet ordre pour toujours</button><button class="btn sm" data-act="prepUsual">↺ Revenir à l'ordre habituel</button></div>` : ""}
+      <p class="small muted" style="margin:8px 0 0">${sub.sens === "matin" ? "Ordre de ramassage du matin, puis l'établissement." : "Départ de chez vous, 1re étape l'établissement, puis dépôt dans l'ordre inverse du matin, puis retour. Vous pourrez confirmer la liste des enfants présents en arrivant à l'établissement."}</p></div>`;
+  if (sub.sens === "soir") h += `<div class="card row" style="background:var(--night-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(t.etab.nom||"Établissement")}</b><div class="addr">${esc(t.etab.adresse)}</div>${(sub.sens==="matin"?horaire(t.etab,new Date()).debut:horaire(t.etab,new Date()).fin) ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens==="matin"?"🕗 Début des cours : "+hTxt(horaire(t.etab,new Date()).debut):"🕓 Fin de journée : "+hTxt(horaire(t.etab,new Date()).fin)}</div>` : ""}</div></div>`;
+  kids.forEach((k, idx) => {
+    const on = sub.present.includes(k.id);
+    const com = sub.sens === "matin" ? k.comMatin : k.comSoir;
+    h += `<label class="card pick ${on?"":"off"}" style="cursor:pointer">
+      ${sub.reorder ? `<div class="ord"><button data-act="pUp" data-i="${idx}" ${idx===0?"disabled":""}>▲</button><button data-act="pDown" data-i="${idx}" ${idx===kids.length-1?"disabled":""}>▼</button></div>`
+        : `<input type="checkbox" class="chk" data-act="prepToggle" data-id="${k.id}" ${on?"checked":""}>`}
+      <div class="grow"><div class="row"><span class="name grow">${esc(kidName(k))}</span>${sub.sens==="matin" && k.heureMatin ? `<span class="pill m">${k.heureMatin.replace(":","h")}</span>` : ""}</div>
+        <div class="addr">📍 ${esc(k.adresse || "Adresse manquante")}</div>
+        ${(() => { const ab = absentPrevu(k, dayKey(new Date()), sub.sens); return ab ? `<div style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absence prévue${ab.motif ? " : " + esc(ab.motif) : ""}</span></div>` : ""; })()}
+        ${com ? `<div class="small muted" style="margin-top:4px">${sub.sens==="matin"?"☀️":"🌙"} ${esc(com)}</div>` : ""}</div></label>`;
+  });
+  if (sub.sens === "matin") h += `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(t.etab.nom||"Établissement")}</b><div class="addr">${esc(t.etab.adresse)}</div>${(sub.sens==="matin"?horaire(t.etab,new Date()).debut:horaire(t.etab,new Date()).fin) ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens==="matin"?"🕗 Début des cours : "+hTxt(horaire(t.etab,new Date()).debut):"🕓 Fin de journée : "+hTxt(horaire(t.etab,new Date()).fin)}</div>` : ""}</div></div>`;
+  h += `<button class="btn go lg" data-act="startRun" ${sub.present.length?"":"disabled"}>▶ Valider les présents et démarrer la tournée</button>
+    <button class="btn w100" style="margin-top:8px" data-act="back">Annuler</button>`;
+  return h;
+}
+
+/* ---------- Tournée en cours ---------- */
+let runReorder = false;
+// la tournée en cours suit les modifications faites dans la fiche (adresses, contacts, consignes, établissement)
+function syncActive(){
+  const a = S.active; if (!a) return false;
+  const t = tour(a.tourneeId); if (!t) return false;
+  let changed = false;
+  a.steps.forEach(s => {
+    if (s.type !== "kid") return;
+    const k = t.enfants.find(x => x.id === s.kid.id);
+    if (k && JSON.stringify(k) !== JSON.stringify(s.kid)){ s.kid = JSON.parse(JSON.stringify(k)); changed = true; }
+  });
+  const e = { ...t.etab };
+  if (JSON.stringify(e) !== JSON.stringify(a.etab)){ a.etab = e; changed = true; }
+  return changed;
+}
+// étape qui suit l'étape i (pas encore validée) : adresse + nom, sinon la maison
+function nextTarget(i){
+  const a = S.active; const j = a.steps.findIndex((s, x) => x !== i && !s.at);
+  if (j >= 0){ const s = a.steps[j]; return s.type === "kid" ? { adr: nav(s.kid), nom: s.kid.prenom } : { adr: nav(a.etab), nom: a.etab.nom || "l'établissement" }; }
+  return S.domicile ? { adr: S.domicile, nom: "la maison" } : null;
+}
+function validateBtn(i, label){
+  const nt = S.autoNav !== false && !S.modeAuto ? nextTarget(i) : null;
+  if (nt && nt.adr) return `<a class="validate" data-act="validate" data-i="${i}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}" style="text-decoration:none">☐ ${label}<span class="small" style="display:block;font-weight:700;opacity:.8">puis 🧭 navigation vers ${esc(nt.nom)}</span></a>`;
+  return `<button class="validate" data-act="validate" data-i="${i}">☐ ${label}</button>`;
+}
+function renderRun(){
+  if (syncActive()) saveLocal();
+  const a = S.active; const ci = curIndex(); const allDone = ci === -1;
+  const night = a.sens === "soir";
+  const remaining = a.steps.filter(s => !s.at).map(s => s.type === "kid" ? nav(s.kid) : nav(a.etab));
+  if (S.domicile) remaining.push(S.domicile);   // l'itinéraire se termine à la maison
+  const links = mapsLinks(remaining);
+  let h = `<div class="timer">
+    <div><span class="small muted">Départ</span><b>${hm(a.start)}</b></div>
+    <div><span class="small muted">Durée</span><b id="elapsed">${durTxt(minsBetween(a.start, new Date()))}</b></div>
+    <div><span class="small muted">Étapes</span><b>${a.steps.filter(s=>s.at).length}/${a.steps.length}</b></div></div>`;
+  if (a.remplace || a.responsable?.nom){
+    h += `<div class="card row" style="padding:10px 14px">
+      <div class="grow small">${a.remplace ? `<div style="font-weight:800">🔁 Remplacement de ${esc(a.remplace)}</div>` : ""}
+        ${a.responsable?.nom ? `<div class="muted">👔 Responsable : ${esc(a.responsable.nom)}${a.responsable.fonction ? " · "+esc(a.responsable.fonction) : ""}</div>` : ""}</div>
+      ${a.responsable?.tel ? `<a class="btn sm call" data-href="${esc(telHref(a.responsable.tel))}">📞 Responsable</a>` : ""}</div>`;
+  }
+  const movable = a.steps.map((s,i) => (s.type === "kid" && !s.at) ? i : -1).filter(i => i >= 0);
+  if (!allDone){
+    h += `<div class="card"><div class="row"><h3 class="grow" style="margin:0 0 4px">🗺️ Itinéraire</h3>${movable.length > 1 ? `<button class="btn sm ${runReorder?"primary":""}" data-act="runReorder">↕️ ${runReorder?"Terminer":"Changer l'ordre"}</button>` : ""}</div>
+      ${(() => { const cs = a.steps[ci]; const adr = cs ? (cs.type === "kid" ? nav(cs.kid) : nav(a.etab)) : ""; const nm = cs ? (cs.type === "kid" ? cs.kid.prenom : (a.etab.nom || "l'établissement")) : "";
+        return adr ? `<a class="btn go w100" style="margin-top:6px;padding:14px" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", adr, []))}">🧭 Naviguer vers ${esc(nm)}</a>
+          <p class="small muted" style="margin:6px 0 0">Une étape à la fois : à chaque validation, la navigation part vers l'étape suivante.</p>` : `<p class="small muted">Adresse manquante pour cette étape.</p>`; })()}
+    </div>`;
+  }
+  let n = 0;
+  a.steps.forEach((s, i) => {
+    const cls = s.at ? "done" : (i === ci ? "current" : "later");
+    if (s.type === "etab"){
+      h += `<div class="card step ${cls}" id="step-${i}"><div class="row"><span class="num" style="background:var(--brand);color:var(--brand-ink)">🏫</span>
+        <div class="grow"><div class="name">${esc(a.etab.nom || "Établissement")}</div><div class="addr">📍 ${esc(a.etab.adresse || "—")}</div></div>${etabRef(a) ? `<span class="pill ${night?"s":"m"}">${night?"sortie":"cours"} ${hTxt(etabRef(a))}</span>` : ""}</div>
+        ${s.at && etabRef(a) ? (()=>{ const d=new Date(s.at); const late=(d.getHours()*60+d.getMinutes()) - toMinutes(etabRef(a)); return `<div class="small" style="margin-top:6px;font-weight:800;color:${late>0?"var(--warn)":"var(--go)"}">${late>0?`⚠ Arrivé ${durTxt(late)} après ${night?"la fin":"le début"} des cours`:`✔ Arrivé ${durTxt(-late)} avant ${night?"la fin":"le début"} des cours`}</div>`; })() : ""}
+        ${s.at ? `<div class="row" style="margin-top:10px"><span class="doneline grow">✔ Arrivé à ${hm(s.at)}</span><button class="btn sm" data-act="validate" data-i="${i}">Annuler</button></div>`
+          : `<div class="actions row" style="margin-top:10px">${nav(a.etab) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(a.etab), []))}">🧭 Y aller</a>` : ""}${a.etab.tel ? `<a class="btn sm call" data-href="${esc(telHref(a.etab.tel))}">📞 Établissement</a>` : ""}</div>
+             ${night ? `<button class="validate" data-act="pickupList" data-i="${i}">☐ Enfants récupérés — confirmer la liste<span class="small" style="display:block;font-weight:700;opacity:.8">cochez les enfants présents dans le véhicule</span></button>`
+                     : validateBtn(i, "Arrivé à l'établissement — valider")}`}
+      </div>`;
+      return;
+    }
+    n++;
+    const k = s.kid; const com = night ? k.comSoir : k.comMatin;
+    h += `<div class="card step ${night?"night":""} ${cls}" id="step-${i}">
+      <div class="row">${runReorder && !s.at && movable.length > 1 ? `<div class="ord" style="flex-direction:row"><button data-act="rUp" data-i="${i}" ${movable[0]===i?"disabled":""}>▲</button><button data-act="rDown" data-i="${i}" ${movable[movable.length-1]===i?"disabled":""}>▼</button></div>` : ""}<span class="num" style="${s.at?"background:var(--go)":""}">${s.at ? "✔" : n}</span>
+        <span class="name grow">${esc(kidName(k))}</span>
+        ${!night && k.heureMatin ? `<span class="pill m">prévu ${k.heureMatin.replace(":","h")}</span>` : ""}</div>
+      <div class="addr">📍 ${esc(k.adresse || "Adresse manquante")}</div>
+      ${com ? `<div class="com ${night?"s":""}"><b>${night?"🌙 Dépôt :":"☀️ Ramassage :"}</b> ${esc(com)}</div>` : ""}
+      ${k.note ? `<div class="small muted" style="margin-top:6px">📝 ${esc(k.note)}</div>` : ""}`;
+    if (s.at){
+      h += `<div class="row" style="margin-top:10px"><span class="doneline grow">✔ Validé à ${hm(s.at)}</span><button class="btn sm" data-act="validate" data-i="${i}">Annuler</button></div>`;
+      h += contactBlock(k, true, hmInput(s.at), i);
+    } else {
+      h += `<div class="row" style="margin-top:10px">
+          ${nav(k) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(k), []))}">🧭 ${i===ci && !S.modeAuto?"Naviguer vers cette étape":"Y aller"}</a>` : ""}
+          ${(k.contacts||[]).some(c=>c.tel) ? `<button class="btn sm sms" data-act="msgs" data-i="${i}">💬 Prévenir la famille</button>` : ""}
+          <button class="btn sm danger" data-act="absentStep" data-i="${i}">⏭ Absent / passer</button></div>
+        ${validateBtn(i, (night ? "Enfant déposé" : "Enfant pris en charge") + " — valider l'étape")}`;
+    }
+    h += `</div>`;
+  });
+  if (allDone){
+    const last = a.steps[a.steps.length-1]?.at;
+    h += `<div class="card step current" id="step-retour" style="border-color:var(--go)"><div class="row"><span class="num" style="background:var(--go)">🏠</span>
+        <div class="grow"><div class="name">Retour ${S.domicile ? "à la maison" : ""}</div><div class="addr">${S.domicile ? "📍 " + esc(S.domicile) : ""}</div></div></div>
+      <div class="small muted" style="margin-top:8px;font-weight:700">Dernière étape validée à ${hm(last)} · retour en cours, compté dans la durée.</div>
+      ${S.domicile ? `<a class="btn go w100" style="margin-top:10px" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", S.domicile, []))}">🧭 Naviguer vers la maison</a>`
+        : `<label class="f">🏠 Votre adresse de domicile (enregistrée pour toutes les tournées)</label>${addrField('data-set="domicile"', "", "Votre adresse, code postal, ville")}`}
+      <button class="btn primary lg" data-act="finish" style="margin-top:10px;padding:20px;font-size:19px">🏁 Je suis rentré — finir la tournée</button></div>`;
+  } else {
+    h += `<p class="small muted" style="text-align:center">Après la dernière étape, l'étape « Retour » apparaît avec le bouton « Finir la tournée ».</p>`;
+  }
+  h += `<button class="btn danger w100" style="margin-top:14px" data-act="abort">✖ Abandonner cette tournée</button>`;
+  return h;
+}
+function contactBlock(k, done, heure, i){
+  const night = S.active?.sens === "soir";
+  const tplKey = done ? (night ? "valideSoir" : "valideMatin") : (night ? "avantSoir" : "avantMatin");
+  const msg = fill(S.tpl[tplKey], k, heure);
+  const cs = (k.contacts||[]).filter(c => c.tel);
+  if (!cs.length) return `<p class="small muted">Aucun numéro de famille enregistré.</p>`;
+  let h = `<div class="msgbox" style="margin-top:10px">${esc(msg)}</div>`;
+  cs.forEach(c => {
+    h += `<div class="contact"><div class="small" style="font-weight:800">👤 ${esc(contactLabel(c))} · ${esc(c.tel)}</div>
+      <div class="row" style="margin-top:6px">
+        <a class="btn callf grow" data-href="${esc(telHref(c.tel))}">📞 Appeler</a>
+        <a class="btn smsf grow" data-href="${esc(smsHref(c.tel, msg))}">💬 Envoyer le SMS</a>
+      </div></div>`;
+  });
+  h += `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="msgs" data-i="${i}">Autres messages…</button><button class="btn sm" data-act="copy" data-text="${esc(msg)}">📋 Copier</button></div>`;
+  return h;
+}
+function msgsSheet(i){
+  const a = S.active; const s = a.steps[i]; const k = s.kid;
+  const heure = s.at ? hmInput(s.at) : (k.heureMatin || "");
+  const keys = a.sens === "matin" ? ["avantMatin","devant","valideMatin"] : ["avantSoir","devant","valideSoir"];
+  const cs = (k.contacts||[]).filter(c => c.tel);
+  let h = `<h2>💬 Famille de ${esc(k.prenom)}</h2><p class="small muted" style="margin-top:0">Le SMS s'ouvre dans votre application Messages, prêt à envoyer. Si rien ne s'ouvre, utilisez « Copier ».</p>`;
+  keys.forEach(key => {
+    const msg = fill(S.tpl[key], k, heure);
+    h += `<div class="card"><div class="small muted" style="font-weight:800">${TPL_LABELS[key]}</div><div class="msgbox" style="margin:6px 0">${esc(msg)}</div>
+      <div class="row">${cs.map(c => `<a class="btn sm sms" data-href="${esc(smsHref(c.tel, msg))}">💬 ${esc(contactLabel(c))}</a>`).join("")}
+      <button class="btn sm" data-act="copy" data-text="${esc(msg)}">📋 Copier</button></div></div>`;
+  });
+  h += `<div class="card"><div class="small muted" style="font-weight:800">Appeler</div><div class="row" style="margin-top:6px">${cs.map(c => `<a class="btn sm call" data-href="${esc(telHref(c.tel))}">📞 ${esc(contactLabel(c))} · ${esc(c.tel)}</a>`).join("")}</div></div>
+    <button class="btn w100" data-act="close">Fermer</button>`;
+  openSheet(h);
+}
+
+/* ---------- Édition d'une tournée ---------- */
+function renderEdit(){
+  const t = tour(sub.id); if (!t){ sub = null; return renderHome(); }
+  let h = `<div class="row" style="margin-bottom:10px"><button class="btn sm" data-act="back">← Retour</button><span class="grow"></span><button class="btn sm go" data-act="saveTour">✅ Valider</button></div>
+  <div class="card"><h3>Tournée</h3>
+    <label class="f">Nom de la tournée</label><input class="t" data-tf="nom" value="${esc(t.nom)}" placeholder="ex. Circuit IME Les Tilleuls">
+  </div>
+  <div class="card"><h3>👔 Personne responsable</h3>
+    <div class="row"><div class="grow"><label class="f">Nom</label><input class="t" data-tf="responsable.nom" value="${esc(t.responsable.nom)}" placeholder="ex. Mme Bernard"></div>
+      <div class="grow"><label class="f">Fonction</label><input class="t" data-tf="responsable.fonction" value="${esc(t.responsable.fonction)}" placeholder="ex. Responsable transport"></div></div>
+    <div class="row"><div class="grow"><label class="f">Téléphone</label><input class="t" type="tel" inputmode="tel" data-tf="responsable.tel" value="${esc(t.responsable.tel)}"></div>
+      <div class="grow"><label class="f">E-mail (facultatif)</label><input class="t" type="email" data-tf="responsable.email" value="${esc(t.responsable.email)}"></div></div>
+  </div>
+  <div class="card"><h3>🔁 Remplacement</h3>
+    <label class="row" style="font-weight:800"><input type="checkbox" data-tf="remplacement.actif" ${t.remplacement.actif?"checked":""} style="width:22px;height:22px"> Cette tournée est un remplacement</label>
+    ${t.remplacement.actif ? `
+    <div class="row"><div class="grow"><label class="f">Personne remplacée</label><input class="t" data-tf="remplacement.nom" value="${esc(t.remplacement.nom)}" placeholder="ex. Jean Dupont"></div>
+      <div class="grow"><label class="f">Son téléphone (facultatif)</label><input class="t" type="tel" inputmode="tel" data-tf="remplacement.tel" value="${esc(t.remplacement.tel)}"></div></div>
+    <div class="row"><div class="grow"><label class="f">Du</label><input class="t" type="date" data-tf="remplacement.du" value="${esc(t.remplacement.du)}"></div>
+      <div class="grow"><label class="f">Au (facultatif)</label><input class="t" type="date" data-tf="remplacement.au" value="${esc(t.remplacement.au)}"></div></div>
+    <p class="small muted" style="margin:6px 0 0">Le nom de la personne remplacée est enregistré avec chaque tournée de l'historique.</p>` : ""}
+  </div>
+  <div class="card"><h3>🏫 Établissement</h3>
+    <p class="small muted" style="margin:0">Destination le matin, point de départ le soir.</p>
+    <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etab.nom" value="${esc(t.etab.nom)}" placeholder="ex. IME Les Tilleuls">
+    <label class="f">Adresse complète</label>${addrField('data-tf="etab.adresse"', t.etab.adresse, "Rue, code postal, ville")}
+    ${gpsField('data-tf="etab.gps"', t.etab.gps)}
+    <label class="f">🕗 Horaires des cours (laisser vide les jours sans cours)</label>
+    <table style="width:100%;border-collapse:collapse"><tr class="small muted"><td></td><td style="font-weight:800">Début</td><td style="font-weight:800">Fin</td></tr>
+    ${[1,2,3,4,5,6].map(d => { const h = (t.etab.horaires||{})[d] || {}; return `<tr><td style="font-weight:800;text-transform:capitalize;padding-right:6px">${JOURS_LONG[d].slice(0,3)}.</td>
+      <td style="padding:3px 4px 3px 0"><input class="t" type="time" data-hor="${d}.debut" value="${esc(h.debut||"")}" style="padding:7px"></td>
+      <td style="padding:3px 0"><input class="t" type="time" data-hor="${d}.fin" value="${esc(h.fin||"")}" style="padding:7px"></td></tr>`; }).join("")}</table>
+    <button class="btn sm" style="margin-top:6px" data-act="copyMon">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>
+    <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etab.tel" value="${esc(t.etab.tel)}">
+  </div>
+  <div class="card"><div class="row"><h3 class="grow" style="margin:0">👧 Enfants – ordre du matin</h3><button class="btn sm brand" data-act="addKid">➕ Ajouter</button></div>
+    <p class="small muted">Le soir, la tournée suit automatiquement l'ordre inverse.</p>
+    ${t.enfants.length > 1 ? `<button class="btn sm" data-act="sortTime">🕗 Trier par heure de ramassage</button>` : ""}
+  </div>`;
+  if (!t.enfants.length) h += `<div class="card empty muted">Aucun enfant dans cette tournée.</div>`;
+  t.enfants.forEach((k, i) => {
+    h += `<div class="card"><div class="row" style="align-items:flex-start">
+      <div class="ord"><button data-act="kUp" data-i="${i}" ${i===0?"disabled":""}>▲</button><button data-act="kDown" data-i="${i}" ${i===t.enfants.length-1?"disabled":""}>▼</button></div>
+      <div class="grow"><div class="row"><span class="num">${i+1}</span><span class="name grow">${esc(kidName(k))}</span>${k.heureMatin?`<span class="pill m">${k.heureMatin.replace(":","h")}</span>`:""}</div>
+        <div class="addr">📍 ${esc(k.adresse || "—")}</div>
+        <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
+          <span class="small muted">${(k.contacts||[]).filter(c=>c.tel).length} contact(s)</span></div>
+        ${(() => { const td = dayKey(new Date()); const nx = (k.absences||[]).filter(x => (x.au || x.du) >= td).sort((a,b) => a.du < b.du ? -1 : 1)[0]; return nx ? `<div style="margin-top:6px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absent ${esc(absTxt(nx))}</span></div>` : ""; })()}</div>
+      <button class="btn sm" data-act="editKid" data-i="${i}">✏️</button></div></div>`;
+  });
+  const soirKids = eligible(t, "soir");
+  if (soirKids.length > 1){
+    const custom = Array.isArray(t.ordreSoir) && t.ordreSoir.length;
+    h += `<div class="card" style="margin-top:16px"><h3>🌙 Ordre de dépôt du soir</h3>
+      <label class="row" style="margin:6px 0"><input type="radio" name="osoir" data-act="soirAuto" ${custom?"":"checked"}> Inverse du matin (automatique)</label>
+      <label class="row" style="margin:6px 0"><input type="radio" name="osoir" data-act="soirCustom" ${custom?"checked":""}> Ordre personnalisé</label>
+      ${custom ? soirKids.map((k, i) => `<div class="row" style="border-top:1px solid var(--line);padding:6px 0"><div class="ord" style="flex-direction:row"><button data-act="sUp" data-i="${i}" ${i===0?"disabled":""}>▲</button><button data-act="sDown" data-i="${i}" ${i===soirKids.length-1?"disabled":""}>▼</button></div><span class="num" style="background:var(--night)">${i+1}</span><b class="grow">${esc(kidName(k))}</b></div>`).join("") : `<p class="small muted" style="margin:4px 0 0">${soirKids.map(k => esc(k.prenom)).join(" → ")}</p>`}
+    </div>`;
+  }
+  h += `<button class="btn go lg" style="margin-top:14px" data-act="saveTour">✅ Valider les modifications</button>`;
+  h += `<button class="btn danger w100" style="margin-top:18px" data-act="delTour">🗑 Supprimer cette tournée</button>`;
+  return h;
+}
+
+/* ---------- Historique ---------- */
+/* =========================================================
+   Relevé des tournées (PDF / image) pour l'employeur
+   ========================================================= */
+let rep = null;
+function allEntries(){ return Object.values(H).flat().filter(Boolean).sort((a,b) => a.start < b.start ? -1 : 1); }
+function mondayOf(dk){ const d = new Date(dk+"T12:00:00"); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return dayKey(d); }
+function repEntries(){
+  const all = allEntries();
+  if (rep.mode === "mois") return all.filter(e => monthKey(e.start) === rep.month);
+  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); const su = addDays(m, 6); return all.filter(e => e.date >= m && e.date <= su); }
+  return all.filter(e => rep.days.includes(e.date));
+}
+function repPeriode(){
+  if (rep.mode === "mois") return moisTxt(rep.month);
+  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); return `semaine du ${dateLong(m)} au ${dateLong(addDays(m, 6))}`; }
+  const d = rep.days.slice().sort(); return d.length === 1 ? dateLong(d[0]) : `${d.length} journées choisies (${d.map(dFr).join(", ")})`;
+}
+function repFile(ext){
+  const base = rep.mode === "mois" ? `releve-tournees-${rep.month}` : rep.mode === "semaine" ? `releve-tournees-semaine-${mondayOf(rep.week)}` : `releve-tournees-${(rep.days.slice().sort()[0]||"jours")}`;
+  return base + "." + ext;
+}
+function repRows(items){
+  return items.map(e => { const d = new Date(e.start); return {
+    date: `${JOURS[d.getDay()]} ${dFr(e.date)}`, tournee: e.tourneeNom || "", trajet: e.sens === "matin" ? "Matin" : "Soir",
+    depart: hm(e.start), arrivee: hm(e.end), duree: durTxt(e.duree||0), nb: String(e.nb ?? ""), absents: (e.absents||[]).join(", ") || "—" }; });
+}
+function repMeta(items){
+  const rempl = [...new Set(items.map(e => e.remplace).filter(Boolean))];
+  const resp = [...new Set(items.map(e => e.responsable).filter(Boolean))];
+  const tot = items.reduce((a,e) => a + (e.duree||0), 0);
+  return { rempl, resp, tot, n: items.length };
+}
+function reportSheet(){
+  if (!rep){
+    const months = [...new Set(allEntries().map(e => monthKey(e.start)))].sort().reverse();
+    rep = { mode:"mois", month: months.includes(histMonth) ? histMonth : (months[0] || histMonth), week: dayKey(new Date()), days: [] };
+  }
+  const all = allEntries();
+  const months = [...new Set(all.map(e => monthKey(e.start)))].sort().reverse();
+  const items = repEntries(); const m = repMeta(items);
+  let ctl = "";
+  if (rep.mode === "mois") ctl = `<label class="f">Mois</label><select class="t" id="rep_month">${months.map(mk => `<option value="${mk}" ${mk===rep.month?"selected":""}>${moisTxt(mk)}</option>`).join("")}</select>`;
+  else if (rep.mode === "semaine") ctl = `<label class="f">Un jour de la semaine voulue</label><input class="t" type="date" id="rep_week" value="${rep.week}">
+      <p class="small muted" style="margin:4px 0 0">Semaine du ${dateLong(mondayOf(rep.week))} au ${dateLong(addDays(mondayOf(rep.week), 6))}</p>`;
+  else {
+    const days = [...new Set(all.map(e => e.date))].sort().reverse();
+    ctl = `<label class="f">Cochez les journées</label><div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;padding:4px 10px">${days.map(dk => {
+      const n = all.filter(e => e.date === dk).length;
+      return `<label class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-repday="${dk}" ${rep.days.includes(dk)?"checked":""} style="width:22px;height:22px"><span class="grow" style="text-transform:capitalize">${dateLong(dk)}</span><span class="small muted">${n} tournée${n>1?"s":""}</span></label>`; }).join("") || `<p class="small muted">Aucune tournée.</p>`}</div>`;
+  }
+  openSheet(`<h2>📄 Relevé des tournées</h2>
+    <div class="row">${[["mois","Mensuel"],["semaine","Hebdomadaire"],["jours","Jours au choix"]].map(([k,l]) => `<button class="btn sm ${rep.mode===k?"primary":""} grow" data-act="repMode" data-id="${k}">${l}</button>`).join("")}</div>
+    ${ctl}
+    <div class="card" style="margin-top:12px;padding:10px 12px">
+      <b>${m.n} tournée${m.n>1?"s":""}</b> · durée totale <b>${durTxt(m.tot)}</b>
+      <div class="small muted" style="margin-top:2px">${esc(repPeriode())}</div>
+      ${items.length ? `<table class="steps" style="margin-top:6px">${repRows(items).slice(0,40).map(r => `<tr><td>${esc(r.date)} · ${r.trajet}</td><td>${r.depart} → ${r.arrivee} · ${esc(r.duree)}</td></tr>`).join("")}</table>${items.length > 40 ? `<p class="small muted">… et ${items.length-40} autres</p>` : ""}` : `<p class="small muted" style="margin:6px 0 0">Aucune tournée sur cette période.</p>`}
+    </div>
+    <div class="row" style="margin-top:4px">
+      <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length?"":"disabled"}>📄 Fichier PDF</button>
+      <button class="btn grow" style="padding:14px" data-act="repPng" ${items.length?"":"disabled"}>🖼️ Image</button></div>
+    <button class="btn w100" style="margin-top:8px" data-act="repText" ${items.length?"":"disabled"}>📋 Copier en texte (pour un e-mail)</button>
+    <p class="small muted">Le relevé indique pour chaque tournée : le jour, le trajet, l'heure de départ et d'arrivée, la durée, le nombre d'enfants et les enfants absents. Vous pourrez ensuite l'envoyer par e-mail ou par message.</p>
+    <button class="btn w100" data-act="close">Fermer</button>`);
+}
+function repText(){
+  const items = repEntries(); const m = repMeta(items);
+  const L = [`RELEVÉ DES TOURNÉES — ${repPeriode()}`];
+  if (S.chauffeur) L.push(`Chauffeur : ${S.chauffeur}`);
+  if (m.rempl.length) L.push(`Remplacement de : ${m.rempl.join(", ")}`);
+  if (m.resp.length) L.push(`Responsable : ${m.resp.join(", ")}`);
+  L.push("");
+  repRows(items).forEach(r => L.push(`${r.date} — ${r.tournee} — ${r.trajet} : départ ${r.depart}, arrivée ${r.arrivee}, durée ${r.duree}, ${r.nb} enfant(s)${r.absents !== "—" ? ", absents : " + r.absents : ""}`));
+  L.push("", `TOTAL : ${m.n} tournée(s) — ${durTxt(m.tot)}`);
+  return L.join("\n");
+}
+
+/* ---------- PDF (écrit sans bibliothèque : police Helvetica standard) ---------- */
+const WIN = { "€":128,"‚":130,"„":132,"…":133,"‘":145,"’":146,"“":147,"”":148,"•":149,"–":150,"—":151,"œ":156,"Œ":140,"Ÿ":159,"š":154,"Š":138 };
+function pdfStr(t){
+  let o = "";
+  for (const ch of String(t)){
+    let c = ch.codePointAt(0);
+    if (WIN[ch]) c = WIN[ch]; else if (c > 255 || (c >= 128 && c < 160)) c = c === 8239 || c === 160 ? 32 : 63;
+    if (c === 40 || c === 41 || c === 92) o += "\\" + String.fromCharCode(c);
+    else if (c < 32 || c > 126) o += "\\" + c.toString(8).padStart(3, "0");
+    else o += String.fromCharCode(c);
+  }
+  return o.replace(/\?{2,}/g, "?");
+}
+function txtW(t, size, bold){
+  let w = 0;
+  for (const ch of String(t)){ w += /[ijlI.,:;'|!]/.test(ch) ? .28 : /[ftr\- ()]/.test(ch) ? .33 : /[mwMW]/.test(ch) ? .83 : /[A-Z]/.test(ch) ? .68 : /[0-9]/.test(ch) ? .56 : .53; }
+  return w * size * (bold ? 1.06 : 1);
+}
+function wrap(t, width, size, bold){
+  const words = String(t).split(/\s+/); const lines = []; let cur = "";
+  words.forEach(w => { const test = cur ? cur + " " + w : w; if (txtW(test, size, bold) <= width || !cur) cur = test; else { lines.push(cur); cur = w; } });
+  if (cur) lines.push(cur);
+  return lines.map(l => { while (txtW(l, size, bold) > width && l.length > 1) l = l.slice(0, -2) + "…"; return l; });
+}
+function makePdf(){
+  const items = repEntries(); const m = repMeta(items); const rows = repRows(items);
+  const W = 842, Hh = 595, M = 36;
+  const cols = [["Date","date",88],["Tournée","tournee",130],["Trajet","trajet",48],["Départ","depart",52],["Arrivée","arrivee",54],["Durée","duree",58],["Enfants","nb",50],["Enfants absents","absents",W-2*M-480]];
+  const pages = []; let ops = []; let y;
+  const T = (x, yy, t, size = 9, bold = false) => ops.push(`BT /${bold?"F2":"F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET`);
+  const line = (x1, y1, x2, y2, g = .8) => ops.push(`${g} G 0.5 w ${x1} ${y1.toFixed(1)} m ${x2} ${y2.toFixed(1)} l S`);
+  const header = () => {
+    ops.push(`0.95 0.92 0.84 rg ${M} ${(y-16).toFixed(1)} ${W-2*M} 20 re f 0 g`);
+    let x = M + 4; cols.forEach(([l,,w]) => { T(x, y-10, l, 8.5, true); x += w; });
+    y -= 22;
+  };
+  const newPage = first => {
+    if (ops.length) pages.push(ops); ops = []; y = Hh - M;
+    if (first){
+      T(M, y-14, "Relevé des tournées", 18, true); y -= 32;
+      T(M, y, repPeriode().replace(/^./, c => c.toUpperCase()), 11, true); y -= 16;
+      const meta = [];
+      if (S.chauffeur) meta.push("Chauffeur : " + S.chauffeur);
+      if (m.rempl.length) meta.push("Remplacement de : " + m.rempl.join(", "));
+      if (m.resp.length) meta.push("Responsable : " + m.resp.join(", "));
+      meta.forEach(t => { T(M, y, t, 10); y -= 14; });
+      T(M, y, `${m.n} tournée${m.n>1?"s":""} — durée totale : ${durTxt(m.tot)}`, 10, true); y -= 20;
+    } else { T(M, y-8, "Relevé des tournées — " + repPeriode() + " (suite)", 9, true); y -= 20; }
+    header();
+  };
+  newPage(true);
+  rows.forEach((r, i) => {
+    const wrapped = cols.map(([,k,w]) => wrap(r[k], w - 8, 9));
+    const h = Math.max(...wrapped.map(l => l.length)) * 11 + 7;
+    if (y - h < M + 30) newPage(false);
+    if (i % 2) ops.push(`0.98 0.97 0.95 rg ${M} ${(y-h+4).toFixed(1)} ${W-2*M} ${h} re f 0 g`);
+    let x = M + 4;
+    wrapped.forEach((ls, c) => { ls.forEach((t, j) => T(x, y - 8 - j*11, t, 9, c === 0)); x += cols[c][2]; });
+    y -= h; line(M, y+4, W-M, y+4);
+  });
+  y -= 10; if (y < M + 30) newPage(false);
+  T(M, y, `Total : ${m.n} tournée${m.n>1?"s":""} — ${durTxt(m.tot)}`, 11, true);
+  pages.push(ops);
+  // assemblage du fichier
+  const objs = []; const add = o => { objs.push(o); return objs.length; };
+  const fontN = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const fontB = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pagesId = objs.length + 1 + pages.length * 2; const kids = [];
+  const gen = `Édité le ${dFr(dayKey(new Date()))} avec Ma tournée scolaire`;
+  pages.forEach((p, i) => {
+    const foot = `BT /F1 8 Tf ${M} 20 Td (${pdfStr(gen)}) Tj ET BT /F1 8 Tf ${W-M-60} 20 Td (${pdfStr(`Page ${i+1} / ${pages.length}`)}) Tj ET`;
+    const stream = p.join("\n") + "\n" + foot;
+    const c = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${Hh}] /Resources << /Font << /F1 ${fontN} 0 R /F2 ${fontB} 0 R >> >> /Contents ${c} 0 R >>`));
+  });
+  add(`<< /Type /Pages /Kids [${kids.map(k => k + " 0 R").join(" ")}] /Count ${kids.length} >>`);
+  const cat = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let out = "%PDF-1.4\n"; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i+1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10,"0") + " 00000 n \n").join("");
+  out += `trailer\n<< /Size ${objs.length+1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([out], { type: "application/pdf" });
+}
+
+/* ---------- Image PNG (dessinée sur un canevas) ---------- */
+function makePng(){
+  const items = repEntries(); const m = repMeta(items); const rows = repRows(items);
+  const S2 = 2, W = 1240, M = 40;
+  const cols = [["Date","date",130],["Tournée","tournee",190],["Trajet","trajet",72],["Départ","depart",78],["Arrivée","arrivee",80],["Durée","duree",88],["Enfants","nb",74],["Enfants absents","absents",W-2*M-712]];
+  const cv = document.createElement("canvas"); const ctx = cv.getContext("2d");
+  const F = (sz, b) => `${b?"700":"400"} ${sz}px Nunito, Arial, sans-serif`;
+  const wrapC = (t, w, sz) => { ctx.font = F(sz); const ws = String(t).split(/\s+/); const ls = []; let cur = ""; ws.forEach(x => { const tt = cur ? cur+" "+x : x; if (ctx.measureText(tt).width <= w || !cur) cur = tt; else { ls.push(cur); cur = x; } }); if (cur) ls.push(cur); return ls; };
+  // mesure
+  ctx.font = F(14);
+  const layout = rows.map(r => { const w = cols.map(([,k,cw]) => wrapC(r[k], cw-12, 14)); return { w, h: Math.max(...w.map(l => l.length)) * 19 + 12 }; });
+  const meta = []; if (S.chauffeur) meta.push("Chauffeur : " + S.chauffeur); if (m.rempl.length) meta.push("Remplacement de : " + m.rempl.join(", ")); if (m.resp.length) meta.push("Responsable : " + m.resp.join(", "));
+  const top = M + 40 + 26 + meta.length * 22 + 30;
+  const H2 = top + 34 + layout.reduce((a,l) => a + l.h, 0) + 70;
+  cv.width = W * S2; cv.height = H2 * S2; ctx.scale(S2, S2);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H2);
+  ctx.fillStyle = "#1f2a2e"; ctx.textBaseline = "top";
+  ctx.font = F(28, true); ctx.fillText("Relevé des tournées", M, M);
+  ctx.font = F(17, true); ctx.fillText(repPeriode().replace(/^./, c => c.toUpperCase()), M, M + 40);
+  ctx.font = F(15); meta.forEach((t, i) => ctx.fillText(t, M, M + 66 + i * 22));
+  ctx.font = F(15, true); ctx.fillText(`${m.n} tournée${m.n>1?"s":""} — durée totale : ${durTxt(m.tot)}`, M, M + 66 + meta.length * 22);
+  let y = top;
+  ctx.fillStyle = "#f2ead6"; ctx.fillRect(M, y, W - 2*M, 32); ctx.fillStyle = "#1f2a2e"; ctx.font = F(14, true);
+  let x = M + 8; cols.forEach(([l,,w]) => { ctx.fillText(l, x, y + 8); x += w; }); y += 34;
+  layout.forEach((l, i) => {
+    if (i % 2){ ctx.fillStyle = "#faf8f3"; ctx.fillRect(M, y, W - 2*M, l.h); }
+    ctx.fillStyle = "#1f2a2e"; let xx = M + 8;
+    l.w.forEach((ls, c) => { ctx.font = F(14, c === 0); ls.forEach((t, j) => ctx.fillText(t, xx, y + 7 + j * 19)); xx += cols[c][2]; });
+    y += l.h; ctx.fillStyle = "#e4e0d6"; ctx.fillRect(M, y - 1, W - 2*M, 1);
+  });
+  ctx.fillStyle = "#1f2a2e"; ctx.font = F(16, true); ctx.fillText(`Total : ${m.n} tournée${m.n>1?"s":""} — ${durTxt(m.tot)}`, M, y + 16);
+  ctx.fillStyle = "#6b7478"; ctx.font = F(12); ctx.fillText(`Édité le ${dFr(dayKey(new Date()))} avec Ma tournée scolaire`, M, y + 44);
+  return new Promise(res => cv.toBlob(b => res(b), "image/png"));
+}
+function downloadBlob(blob, name){
+  const u = URL.createObjectURL(blob); const a = document.createElement("a");
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 30000);
+}
+async function saveReport(kind){
+  try {
+    const blob = kind === "pdf" ? makePdf() : await makePng();
+    if (!dlNs){ downloadBlob(blob, repFile(kind)); toast("Relevé enregistré dans vos téléchargements ✓"); return; }
+    if (dlNs){
+      try { await dlNs.save({ filename: repFile(kind), data: blob }); toast("Relevé enregistré ✓"); return; }
+      catch(e){ if (e?.code === "declined") return; }
+    }
+    toast("Enregistrement de fichier impossible ici : le texte est copié à la place");
+    copyText(repText());
+  } catch(e){ toast("Erreur lors de la création du relevé"); }
+}
+
+function renderHist(){
+  const months = Object.keys(H).filter(mk => (H[mk]||[]).length).sort().reverse();
+  if (!months.includes(histMonth)) months.unshift(histMonth);
+  months.sort().reverse();
+  const items = (H[histMonth]||[]).slice().sort((a,b) => a.start < b.start ? 1 : -1);
+  const tot = items.reduce((s,e) => s + (e.duree||0), 0);
+  let h = `<div class="row" style="margin-bottom:12px"><select class="t grow" id="histMonth">${months.map(mk => `<option value="${mk}" ${mk===histMonth?"selected":""}>${moisTxt(mk)}</option>`).join("")}</select>
+    <button class="btn" data-act="exportHist" ${items.length?"":"disabled"}>📋 Copier</button></div>
+    <button class="btn brand w100" style="margin-bottom:12px;padding:13px" data-act="report" ${Object.values(H).some(x => x && x.length) ? "" : "disabled"}>📄 Éditer un relevé pour l'employeur</button>
+    <div class="tot"><div><span class="small muted">Tournées</span><b>${items.length}</b></div><div><span class="small muted">Temps total</span><b>${durTxt(tot)}</b></div>
+      <div><span class="small muted">☀️ / 🌙</span><b>${items.filter(e=>e.sens==="matin").length} / ${items.filter(e=>e.sens==="soir").length}</b></div></div>`;
+  if (!items.length) h += `<div class="card empty muted"><div class="big">🕓</div>Aucune tournée enregistrée ce mois-ci.<br><span class="small">Chaque tournée terminée s'ajoute ici avec son heure de début, de fin et sa durée.</span></div>`;
+  let lastDay = "";
+  items.forEach(e => {
+    const d = new Date(e.start);
+    if (e.date !== lastDay){ lastDay = e.date; h += `<div class="small muted" style="font-weight:900;margin:14px 2px 6px;text-transform:capitalize">${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}</div>`; }
+    const open = openHist === e.id;
+    h += `<div class="card"><div class="hist" data-act="histOpen" data-id="${e.id}">
+      <span style="font-size:24px">${e.sens==="matin"?"☀️":"🌙"}</span>
+      <div class="grow"><div style="font-weight:900">${esc(e.tourneeNom)}</div><div class="small muted">${hm(e.start)} → ${hm(e.end)} · ${e.nb} enfant${e.nb>1?"s":""}${e.remplace ? " · 🔁 "+esc(e.remplace) : ""}</div></div>
+      <span class="dur">${durTxt(e.duree)}</span></div>`;
+    if (open){
+      h += `<div class="row" style="margin-top:10px"><span class="small muted" style="font-weight:800">Début</span><input type="time" class="tm" data-act="histStart" data-id="${e.id}" value="${hmInput(e.start)}">
+        <span class="small muted" style="font-weight:800">Fin</span><input type="time" class="tm" data-act="histEnd" data-id="${e.id}" value="${hmInput(e.end)}"></div>
+        ${e.remplace || e.responsable ? `<p class="small" style="margin:8px 0 0">${e.remplace ? "🔁 Remplacement de <b>"+esc(e.remplace)+"</b>" : ""}${e.remplace && e.responsable ? " · " : ""}${e.responsable ? "👔 "+esc(e.responsable) : ""}</p>` : ""}
+        ${e.retour != null ? `<p class="small" style="margin:8px 0 0;font-weight:700">Dernier arrêt ${hm(e.dernierArret)} · trajet retour ${durTxt(e.retour)}</p>` : ""}
+        <table class="steps">${(e.etapes||[]).map(s => `<tr><td>${esc(s.label)}</td><td>${s.at ? hm(s.at) : "—"}</td></tr>`).join("")}</table>
+        ${e.absents?.length ? `<p class="small muted">Absents : ${e.absents.map(esc).join(", ")}</p>` : ""}
+        <button class="btn sm danger" style="margin-top:8px" data-act="histDel" data-id="${e.id}">🗑 Supprimer</button>`;
+    }
+    h += `</div>`;
+  });
+  return h;
+}
+
+/* ---------- Réglages ---------- */
+function renderReglages(){
+  return `<div class="card"><h3>👤 Vous</h3><label class="f">Votre prénom (signature des messages)</label><input class="t" data-set="chauffeur" value="${esc(S.chauffeur)}" placeholder="ex. Damien">
+    <label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="autoNav" ${S.autoNav === false ? "" : "checked"} style="width:22px;height:22px"> 🧭 Lancer la navigation vers l'étape suivante à chaque validation</label>
+    <label class="f">🏠 Mon domicile : fin de chaque tournée (matin et soir)</label>${addrField('data-set="domicile"', S.domicile || "", "Votre adresse, code postal, ville")}</div>
+  <div class="card"><h3>💬 Modèles de messages</h3>
+    <p class="small muted" style="margin:0">Remplacés automatiquement : <b>{enfant}</b>, <b>{heure}</b>, <b>{chauffeur}</b></p>
+    ${Object.keys(DEFAULT_TPL).map(k => `<label class="f">${TPL_LABELS[k]}</label><textarea class="t" data-tpl="${k}">${esc(S.tpl[k])}</textarea>`).join("")}
+    <button class="btn sm" style="margin-top:10px" data-act="resetTpl">↺ Remettre les messages par défaut</button>
+  </div>
+  <div class="card"><h3>🔊 Annonces vocales</h3>
+    <label class="row" style="font-weight:800"><input type="checkbox" data-setb="annonces" ${S.annonces === false ? "" : "checked"} style="width:22px;height:22px"> Annoncer à voix haute la prochaine étape après chaque validation</label>
+
+  </div>
+  <div class="card"><h3>📇 Ajouter les familles à mes contacts</h3>
+    <p class="small muted" style="margin-top:0">Crée un fichier avec tous les numéros des familles, nommés pour la commande vocale (« Léa Maman », « Tom Papa »…). Importez-le ensuite dans Google Contacts : ils apparaîtront sur votre téléphone et dans Android Auto.</p>
+    ${(() => { const r = contactRows(); return r.length ? `<div class="msgbox small" style="max-height:140px;overflow:auto">${r.map(x => esc(x.name) + " · " + esc(x.tel)).join("<br>")}</div>` : `<p class="small muted">Aucun numéro enregistré pour l'instant.</p>`; })()}
+    <button class="btn" style="margin-top:10px" data-act="exportContacts">📇 Créer le fichier de contacts</button>
+    <details style="margin-top:10px"><summary class="small" style="font-weight:800;cursor:pointer">Comment l'importer ?</summary>
+      <ol class="small muted" style="padding-left:18px;margin:6px 0 0">
+        <li>Créez le fichier avec le bouton ci-dessus (il s'enregistre dans vos téléchargements).</li>
+        <li>Ouvrez <b>contacts.google.com</b> (de préférence sur ordinateur, ou en « version ordinateur » dans Chrome sur le téléphone).</li>
+        <li>Menu <b>Importer</b> → choisissez le fichier <b>contacts-transport-scolaire.csv</b> → Importer.</li>
+        <li>Les contacts arrivent dans le libellé « Transport scolaire » et se synchronisent sur votre téléphone.</li>
+      </ol>
+      <p class="small muted">Si vous importez une deuxième fois, Google peut créer des doublons : utilisez « Fusionner et corriger » dans Google Contacts.</p></details>
+  </div>
+  <div class="card"><h3>💾 Sauvegarde</h3>
+    <p class="small muted" style="margin-top:0">Tout est enregistré automatiquement dans votre Google Drive (fichier « ma-tournee-donnees.json ») et synchronisé entre vos appareils. Vous pouvez aussi garder une copie de secours.</p>
+    <p class="small" style="margin:0 0 8px">État : <b>${esc(lastStatus || "—")}</b> · <a href="#" data-act="changeCode">changer le code secret</a></p>
+    <div class="row"><button class="btn" data-act="export">📋 Copier la sauvegarde</button><button class="btn" data-act="import">📥 Restaurer</button></div>
+  </div>`;
+}
+
+/* =========================================================
+   Feuilles (fenêtres) et formulaires
+   ========================================================= */
+/* ---------- saisie d'adresse : suggestions + vérification ---------- */
+function knownAddresses(){
+  const set = new Map();
+  S.tournees.forEach(t => { if (t.etab.adresse) set.set(t.etab.adresse.toLowerCase(), t.etab.adresse); t.enfants.forEach(k => { if (k.adresse) set.set(k.adresse.toLowerCase(), k.adresse); }); });
+  return [...set.values()].sort((a,b) => a.localeCompare(b, "fr"));
+}
+function refreshAddrList(){
+  let dl = document.getElementById("addrList");
+  if (!dl){ dl = document.createElement("datalist"); dl.id = "addrList"; document.body.appendChild(dl); }
+  dl.innerHTML = knownAddresses().map(a => `<option value="${esc(a)}">`).join("");
+}
+function addrHint(v){
+  v = (v||"").trim();
+  if (!v) return "";
+  if (/^-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+$/.test(v)) return "";   // coordonnées GPS : point exact
+  if (!/\b\d{5}\b/.test(v)) return "⚠ Ajoutez le code postal pour que Google Maps trouve la bonne adresse.";
+  if (!/^\s*\d/.test(v) && !/(lieu-dit|hameau|ferme|chemin|route)/i.test(v)) return "Astuce : indiquez le numéro dans la rue si possible.";
+  return "";
+}
+function mapsSearch(v){ return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(v||""); }
+function gpsField(attr, value){
+  return `<details ${value ? "open" : ""} style="margin-top:8px"><summary class="small" style="font-weight:800;cursor:pointer">📍 Le GPS ne va pas au bon endroit ? Destination pour le GPS</summary>
+    <input class="t" ${attr} value="${esc(value||"")}" placeholder="ex. IME Les Roches Fleuries, Chamalières  ou  45.77122, 3.06911" style="margin-top:6px">
+    <p class="small muted" style="margin:4px 0 0">Utilisé à la place de l'adresse pour la navigation (l'adresse reste affichée). Deux possibilités : <b>le nom du lieu</b> tel que Google Maps le connaît (ex. « IME Les Roches Fleuries, Chamalières »), ou <b>le point exact</b> : dans Google Maps, appui long sur l'endroit, puis touchez les chiffres affichés en haut pour les copier et collez-les ici.</p></details>`;
+}
+function addrField(attr, value, ph){
+  return `<div class="addrbox"><input class="t" ${attr} data-addr="1" list="addrList" autocomplete="off" value="${esc(value)}" placeholder="${ph}">
+    <div class="row" style="margin-top:6px"><a class="btn sm" data-addrcheck target="_blank" rel="noopener" href="${esc(mapsSearch(value))}">🔎 Vérifier sur Google Maps</a>
+    <span class="small" data-addrhint style="color:var(--warn);font-weight:700">${esc(addrHint(value))}</span></div></div>`;
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.addr) return;
+  const box = t.closest(".addrbox"); if (!box) return;
+  box.querySelector("[data-addrcheck]").href = mapsSearch(t.value);
+  box.querySelector("[data-addrhint]").textContent = addrHint(t.value);
+});
+
+function openSheet(html){ refreshAddrList(); document.getElementById("sheetRoot").innerHTML = `<div class="sheet-bg" data-act="closeBg"><div class="sheet">${html}</div></div>`; }
+function closeSheet(){ document.getElementById("sheetRoot").innerHTML = ""; }
+function toast(t){ document.querySelectorAll(".toast").forEach(x => x.remove()); const d = document.createElement("div"); d.className = "toast"; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2400); }
+function confirmSheet(title, text, act, label){
+  openSheet(`<h2>${title}</h2><p class="muted">${text}</p><div class="row"><button class="btn danger" data-act="${act}">${label}</button><button class="btn" data-act="close">Annuler</button></div>`);
+}
+
+let editKid = null, editKidIndex = -1;
+function kidForm(i){
+  const t = tour(sub.id);
+  editKidIndex = i;
+  editKid = i >= 0 ? JSON.parse(JSON.stringify(t.enfants[i])) :
+    { id:uid(), prenom:"", nom:"", adresse:"", heureMatin:"", comMatin:"", comSoir:"", note:"", matin:true, soir:true, contacts:[{nom:"",lien:"Mère",tel:"",type:"Portable"},{nom:"",lien:"Père",tel:"",type:"Portable"}] };
+  drawKidForm();
+}
+function contactRow(c, j){
+  const known = !c.lien || LIENS.includes(c.lien);
+  return `<div class="contact card" data-ci="${j}" style="padding:10px;margin:10px 0 0;background:#fbfaf7">
+    <div class="row"><span class="num" style="width:26px;height:26px;font-size:13px">${j+1}</span><b class="grow">Numéro ${j+1}</b>
+      <button class="btn sm danger" data-act="delContact" data-j="${j}">✖ Retirer</button></div>
+    <div class="row"><div class="grow"><label class="f">Qui est-ce ?</label><select class="t" data-c="lien">
+        <option value="" ${!c.lien?"selected":""}>— choisir —</option>${LIENS.map(l => `<option ${l===c.lien?"selected":""}>${l}</option>`).join("")}
+        <option value="__autre" ${!known?"selected":""}>Autre (préciser)…</option></select></div>
+      <div class="grow"><label class="f">Type de numéro</label><select class="t" data-c="type">${TYPES_TEL.map(x => `<option ${x===(c.type||"Portable")?"selected":""}>${x}</option>`).join("")}</select></div></div>
+    <div data-autre style="${known?"display:none":""}"><label class="f">Précisez</label><input class="t" data-c="autre" value="${esc(known ? "" : c.lien)}" placeholder="ex. Beau-père, Centre d'accueil…"></div>
+    <div class="row"><div class="grow"><label class="f">Nom (facultatif)</label><input class="t" data-c="nom" value="${esc(c.nom)}" placeholder="ex. Mme Martin"></div>
+      <div class="grow"><label class="f">Téléphone</label><input class="t" data-c="tel" type="tel" inputmode="tel" value="${esc(c.tel)}" placeholder="06 12 34 56 78"></div></div>
+  </div>`;
+}
+function drawKidForm(){
+  const e = editKid;
+  openSheet(`<h2>${editKidIndex >= 0 ? "Modifier l'enfant" : "Nouvel enfant"}</h2>
+    <div class="row"><div class="grow"><label class="f">Prénom *</label><input class="t" id="k_prenom" value="${esc(e.prenom)}" autocomplete="off"></div>
+      <div class="grow"><label class="f">Nom</label><input class="t" id="k_nom" value="${esc(e.nom)}" autocomplete="off"></div></div>
+    <label class="f">Adresse complète (rue, code postal, ville)</label>${addrField('id="k_adresse"', e.adresse, "12 rue des Lilas, 69003 Lyon")}
+    ${gpsField('id="k_gps"', e.gps)}
+    <div class="row"><div class="grow"><label class="f">Heure de ramassage le matin</label><input class="t" type="time" id="k_heure" value="${esc(e.heureMatin)}"></div>
+      <div class="grow"><label class="f">Transporté</label><div class="row" style="padding:8px 0"><label class="row"><input type="checkbox" id="k_matin" ${e.matin!==false?"checked":""}> Matin</label><label class="row" style="margin-left:10px"><input type="checkbox" id="k_soir" ${e.soir!==false?"checked":""}> Soir</label></div></div></div>
+    <label class="f">☀️ Mode de ramassage le matin</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
+    <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
+    <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
+    <h3 style="margin-top:16px">📅 Absences prévues</h3>
+    <div id="absList">${(e.absences||[]).filter(x => (x.au || x.du) >= dayKey(new Date())).sort((a,b) => a.du < b.du ? -1 : 1).map(x => `<div class="row card" style="padding:8px 12px;margin:6px 0"><span class="grow small" style="font-weight:700">📅 ${esc(absTxt(x))}</span><button class="btn sm danger" data-act="delAbs" data-id="${x.id}">✖</button></div>`).join("") || `<p class="small muted" style="margin:0">Aucune absence prévue.</p>`}</div>
+    <details style="margin-top:8px"><summary class="btn sm" style="display:inline-flex">＋ Prévoir une absence</summary>
+      <div class="card" style="margin-top:8px;padding:10px">
+        <div class="row"><div class="grow"><label class="f">Le (ou du)</label><input class="t" type="date" id="ab_du" value="${dayKey(new Date())}"></div>
+          <div class="grow"><label class="f">Au (facultatif)</label><input class="t" type="date" id="ab_au"></div></div>
+        <label class="f">Tournée</label><select class="t" id="ab_sens"><option value="both">☀️🌙 Matin et soir</option><option value="matin">☀️ Matin seulement</option><option value="soir">🌙 Soir seulement</option></select>
+        <label class="f">Motif (facultatif)</label><input class="t" id="ab_motif" placeholder="ex. rendez-vous médical, chez son père…">
+        <button class="btn go w100" style="margin-top:10px" data-act="addAbs">Ajouter l'absence</button>
+      </div></details>
+    <h3 style="margin-top:16px">👨‍👩‍👧 Parents et représentants légaux</h3>
+    <div id="contacts">${e.contacts.map(contactRow).join("")}</div>
+    <button class="btn brand w100" style="margin-top:10px" data-act="addContact">＋ Ajouter un numéro</button>
+    <div class="row" style="margin-top:18px"><button class="btn primary grow" data-act="saveKid">Enregistrer</button><button class="btn" data-act="close">Annuler</button></div>
+    ${editKidIndex >= 0 ? `<button class="btn danger" style="margin-top:14px" data-act="delKid">🗑 Retirer cet enfant de la tournée</button>` : ""}`);
+}
+function readKidForm(){
+  const g = id => document.getElementById(id)?.value.trim() ?? "";
+  const e = editKid;
+  e.prenom = g("k_prenom"); e.nom = g("k_nom"); e.adresse = g("k_adresse"); e.gps = g("k_gps"); e.heureMatin = g("k_heure");
+  e.comMatin = g("k_comMatin"); e.comSoir = g("k_comSoir"); e.note = g("k_note");
+  e.matin = document.getElementById("k_matin").checked; e.soir = document.getElementById("k_soir").checked;
+  e.contacts = [...document.querySelectorAll("#contacts [data-ci]")].map(r => ({
+    nom: r.querySelector("[data-c=nom]").value.trim(),
+    lien: r.querySelector("[data-c=lien]").value === "__autre" ? r.querySelector("[data-c=autre]").value.trim() : r.querySelector("[data-c=lien]").value,
+    type: r.querySelector("[data-c=type]").value,
+    tel: r.querySelector("[data-c=tel]").value.trim() }));
+}
+function saveKid(){
+  readKidForm(); const e = editKid;
+  if (!e.prenom){ toast("Le prénom est obligatoire"); return; }
+  e.contacts = e.contacts.filter(c => c.nom || c.tel);
+  const lim = dayKey(new Date(Date.now() - 30*864e5)); e.absences = (e.absences||[]).filter(x => (x.au || x.du) >= lim);
+  const t = tour(sub.id);
+  if (editKidIndex >= 0) t.enfants[editKidIndex] = e; else t.enfants.push(e);
+  syncActive(); save(); closeSheet(); render(); toast("Enregistré ✓");
+}
+
+async function copyText(txt){
+  try { await navigator.clipboard.writeText(txt); toast("Copié ✓"); }
+  catch(e){ openSheet(`<h2>Copier</h2><p class="small muted">Sélectionnez le texte et copiez-le.</p><textarea class="t" style="min-height:220px" readonly>${esc(txt)}</textarea><button class="btn" style="margin-top:10px" data-act="close">Fermer</button>`); }
+}
+function findHist(id){ for (const mk in H){ const e = (H[mk]||[]).find(x => x.id === id); if (e) return [mk, e]; } return [null,null]; }
+
+/* =========================================================
+   Commande vocale
+   ========================================================= */
+const VOICE_ON = false;   // reconnaissance vocale désactivée pour l'instant (mettre true pour la réactiver)
+let dict = null, voiceAvailable = false, listening = false, heard = "", voiceAction = null;
+function renderVoice(){
+  const root = document.getElementById("voiceRoot");
+  if (!(voiceAvailable && view === "tournees" && S.active)){ root.innerHTML = ""; return; }
+  const hfOn = handsFree && listening;
+  const bubble = hfPaused && handsFree
+    ? `<div class="heard"><b>👂 Mains libres en pause</b><div class="small muted">L'écoute s'arrête quand vous quittez l'application.</div><button class="btn go w100" style="margin-top:8px" data-act="handsFree">▶ Reprendre l'écoute</button></div>`
+    : (heard || voiceAction || (listening && !handsFree)) ? `<div class="heard">${listening && !handsFree ? "🎙️ " : ""}${esc(heard || (listening ? "Je vous écoute…" : ""))}${voiceAction ? `<div style="margin-top:8px">${voiceAction}</div>` : ""}</div>` : "";
+  root.innerHTML = `${bubble}
+    <button class="hf ${hfOn?"on":""}" data-act="handsFree">${hfOn ? `👂 « ${esc(S.wake || "OK tournée")} »` : "👂 Mains libres"}</button>
+    <button class="mic ${listening && !handsFree?"on":""}" data-act="mic" aria-label="Commande vocale">🎙️</button>
+    <button class="micq" data-act="voiceHelp" aria-label="Commandes vocales">?</button>`;
+}
+function stopVoice(){ if (dict && listening) dict.stop().catch(()=>{}); }
+function norm(s){ return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[’']/g," "); }
+
+/* ---------- annonces vocales ---------- */
+let tts = null;
+function say(text){
+  if (S.annonces === false || !text) return;
+  if (tts){ tts.speak(text, { language:"fr" }).catch(()=>{}); return; }
+  try { if ("speechSynthesis" in window){ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "fr-FR"; speechSynthesis.speak(u); } } catch(e){}
+}
+function stepSpeech(i){
+  const a = S.active; const s = a?.steps[i];
+  if (!s) return S.domicile ? "Toutes les étapes sont faites. Retour à la maison." : "Toutes les étapes sont faites.";
+  if (s.type === "etab") return `Prochaine étape : ${a.etab.nom || "l'établissement"}, ${a.etab.adresse || ""}.`;
+  const k = s.kid; const com = a.sens === "soir" ? k.comSoir : k.comMatin;
+  return `Prochaine étape : ${k.prenom}, ${k.adresse || "adresse non renseignée"}.${com ? " Consigne : " + com : ""}`;
+}
+
+/* ---------- liste des commandes ---------- */
+const VOICE_HELP = [
+  ["« Valider » · « Suivant » · « C'est bon »", "valide l'étape en cours"],
+  ["« Annuler »", "annule la dernière validation"],
+  ["« Prochaine étape »", "annonce l'enfant, l'adresse et la consigne"],
+  ["« Consigne »", "relit le mode de ramassage ou de dépôt"],
+  ["« Naviguer » · « GPS »", "prépare Google Maps vers l'étape en cours"],
+  ["« Appeler la maman / le papa / Léa »", "appelle la famille"],
+  ["« Message » · « J'arrive » · « Je suis devant »", "prépare le SMS à la famille"],
+  ["« Appeler le responsable »", "appelle la personne responsable"],
+  ["« Appeler la personne remplacée » (ou son prénom)", "appelle la personne que vous remplacez"],
+  ["« Appeler l'école »", "appelle l'établissement"],
+  ["« Léa absente »", "retire l'enfant de la tournée du jour"],
+  ["« Combien il en reste ? »", "annonce les étapes restantes et la durée"],
+  ["« Aide » · « Help »", "ouvre le bouton Help"],
+  ["« Je suis rentré » · « Terminer »", "finit la tournée (après la dernière étape)"],
+  ["« Silence »", "arrête l'annonce en cours"]
+];
+function voiceHelpSheet(){
+  openSheet(`<h2>🎙️ Commandes vocales</h2>
+    <p class="small muted" style="margin-top:0">Touchez le micro et dites la commande. Ou activez <b>👂 Mains libres</b> et dites « ${esc(S.wake || "OK tournée")} » avant chaque commande. ${tts ? "L'application vous répond à voix haute (désactivable dans ⚙️ Réglages)." : ""}</p>
+    <div class="card" style="padding:6px 12px">${VOICE_HELP.map(([c,d]) => `<div style="padding:7px 0;border-bottom:1px solid var(--line)"><b>${c}</b><div class="small muted">${d}</div></div>`).join("")}</div>
+    <button class="btn w100" data-act="close">Fermer</button>`);
+}
+
+/* ---------- actions de tournée partagées (voix + boutons) ---------- */
+function markAbsent(i){
+  const a = S.active; const s = a?.steps[i]; if (!s || s.type !== "kid" || s.at) return false;
+  a.steps.splice(i, 1); a.absents = [...(a.absents||[]), kidName(s.kid)];
+  if (focusKidStep === i) focusKidStep = null;
+  save(); render(); toast(s.kid.prenom + " retiré(e) de la tournée");
+  return s.kid.prenom;
+}
+function undoLast(){
+  const a = S.active; if (!a) return null;
+  let best = -1; a.steps.forEach((s, i) => { if (s.at && (best < 0 || s.at >= a.steps[best].at)) best = i; });
+  if (best < 0) return null;
+  a.steps[best].at = null; save(); render();
+  return a.steps[best].type === "kid" ? a.steps[best].kid.prenom : (a.etab.nom || "l'établissement");
+}
+
+/* ---------- interprétation des commandes ---------- */
+function voiceCommand(text){
+  const t = " " + norm(text) + " "; const a = S.active; if (!a) return;
+  const ci = curIndex();
+  const has = re => re.test(t);
+  const done = (msg, speak) => { heard = msg; renderVoice(); say(speak ?? msg); };
+  const offer = (href, label, cls, blank) => {
+    voiceAction = `<a class="btn ${cls} w100" href="${esc(href)}" ${blank ? 'target="_blank" rel="noopener"' : ""}>${label}</a>`;
+    renderVoice();
+    try { const l = document.createElement("a"); l.href = href; if (blank){ l.target = "_blank"; l.rel = "noopener"; } document.body.appendChild(l); l.click(); l.remove(); } catch(e){}
+  };
+  // enfant nommé dans la phrase
+  const kidIdx = a.steps.findIndex(s => s.type === "kid" && s.kid.prenom && t.includes(" " + norm(s.kid.prenom) + " "));
+  const isCall = has(/appel|telephon|sonne/), isMsg = has(/message|sms|texto|previen|ecri|j arrive|devant/);
+  const t0 = tour(a.tourneeId);
+  const resp = (t0 && t0.responsable) || a.responsable || {};
+  const rempl = t0?.remplacement || {};
+  const remplOn = rempl.actif && rempl.nom && (a.remplace || remplActif(t0));
+  const remplFirst = remplOn ? norm(rempl.nom).split(" ")[0] : "§";
+
+  if (has(/\b(silence|tais toi|stop)\b/)){ try { tts?.stop(); } catch(e){} heard = ""; renderVoice(); return; }
+  if (has(/commandes|que (puis|peux) je dire|qu est ce que je (peux|dois) dire/)){ heard = ""; renderVoice(); voiceHelpSheet(); return; }
+  if (has(/\b(help|aide|secours|urgence)\b/) && !isCall){ heard = ""; voiceAction = null; renderVoice(); helpSheet(); return; }
+
+  if (has(/absent/)){
+    const i = kidIdx >= 0 ? kidIdx : (ci >= 0 && a.steps[ci].type === "kid" ? ci : -1);
+    if (i < 0) return done("Quel enfant est absent ?", "Quel enfant est absent ? Dites par exemple : Léa absente.");
+    if (a.steps[i].at) return done(a.steps[i].kid.prenom + " est déjà validé(e)");
+    const p = markAbsent(i); return done(`${p} retiré(e) de la tournée`, `${p} est absent. ${stepSpeech(curIndex())}`);
+  }
+  if (has(/annul|erreur|retour arriere|pas encore/)){
+    const p = undoLast(); return done(p ? `Validation de ${p} annulée` : "Rien à annuler");
+  }
+  if (has(/combien|reste|ou en (suis|est)|duree/)){
+    const r = a.steps.filter(s => !s.at).length; const d = durTxt(minsBetween(a.start, new Date()));
+    return done(r ? `${r} étape${r>1?"s":""} restante${r>1?"s":""} · ${d}` : `Toutes les étapes sont faites · ${d}`,
+      (r ? `Il reste ${r} étape${r>1?"s":""}.` : "Toutes les étapes sont faites.") + ` La tournée dure depuis ${d.replace(" h ", " heure ").replace("min", "minutes")}.`);
+  }
+  if (has(/termin|je suis rentre|fin de (la )?tournee|fini/)){
+    if (ci === -1){ finishRun(); say("Tournée terminée. Bonne fin de journée."); return; }
+    const r = a.steps.filter(s => !s.at).length; return done(`Encore ${r} étape${r>1?"s":""} avant de finir`);
+  }
+  if (has(/consigne|commentaire|instruction/)){
+    const i = kidIdx >= 0 ? kidIdx : ci; const s = a.steps[i];
+    if (!s || s.type !== "kid") return done("Pas de consigne pour cette étape");
+    const com = a.sens === "soir" ? s.kid.comSoir : s.kid.comMatin;
+    return done(com ? `${s.kid.prenom} : ${com}` : `Pas de consigne pour ${s.kid.prenom}`);
+  }
+  if (has(/navig|gps|itineraire|y aller|guide|route/) && !isCall && !isMsg){
+    if (ci < 0){ if (S.domicile) offer(mapsDirUrl("", S.domicile, []), "🧭 Naviguer vers la maison", "go", true); return; }
+    const s = a.steps[ci]; const adr = s.type === "kid" ? nav(s.kid) : nav(a.etab);
+    if (!adr) return done("Adresse manquante pour cette étape");
+    offer(mapsDirUrl("", adr, []), `🧭 Naviguer vers ${esc(s.type === "kid" ? s.kid.prenom : (a.etab.nom || "l'établissement"))}`, "go", true); return;
+  }
+  if (has(/prochain|suivante ?\?|c est qui|qui (est|c est) le|adresse/) && !isCall && !isMsg && !has(/valid/)){
+    const msg = stepSpeech(ci); return done(msg.replace("Prochaine étape : ", "➡ "), msg);
+  }
+  if (!isCall && !isMsg && has(/valid|suivant|c est bon|\bok\b|d accord|pris en charge|depose|recupere|monte|arrive a|c est fait/)){
+    if (ci < 0) return done("Toutes les étapes sont déjà validées", "Toutes les étapes sont validées. Dites : je suis rentré, pour finir la tournée.");
+    const s = a.steps[ci]; const nm = s.type === "kid" ? s.kid.prenom : (a.etab.nom || "Établissement");
+    const nt = S.autoNav !== false && !S.modeAuto ? nextTarget(ci) : null;
+    validateStep(ci, true);
+    done(`✔ ${nm} validé(e)`, `${nm}, validé. ${stepSpeech(curIndex())}`);
+    if (nt && nt.adr) offer(mapsDirUrl("", nt.adr, []), `🧭 Naviguer vers ${esc(nt.nom)}`, "go", true);
+    return;
+  }
+
+  if (isCall || isMsg){
+    // personne responsable / personne remplacée / établissement
+    if (has(/responsable|chef|patron|referent transport/)){
+      if (!resp.tel) return done("Pas de numéro pour la personne responsable");
+      return isCall ? offer(telHref(resp.tel), `📞 Appeler ${esc(resp.nom || "le responsable")}`, "callf") : offer(smsHref(resp.tel, ""), `💬 SMS à ${esc(resp.nom || "le responsable")}`, "smsf");
+    }
+    if (remplOn && (has(/remplac/) || t.includes(" " + remplFirst + " "))){
+      if (!rempl.tel) return done("Pas de numéro pour la personne remplacée");
+      return isCall ? offer(telHref(rempl.tel), `📞 Appeler ${esc(rempl.nom)}`, "callf") : offer(smsHref(rempl.tel, ""), `💬 SMS à ${esc(rempl.nom)}`, "smsf");
+    }
+    if (has(/ecole|etablissement|\bime\b|college|lycee|centre/) || (a.etab.nom && t.includes(" " + norm(a.etab.nom) + " "))){
+      if (!a.etab.tel) return done("Pas de numéro pour l'établissement");
+      return offer(telHref(a.etab.tel), `📞 Appeler ${esc(a.etab.nom || "l'établissement")}`, "callf");
+    }
+    // famille de l'enfant
+    let idx = kidIdx >= 0 ? kidIdx : (focusKidStep ?? -1);
+    if (idx < 0 && ci >= 0 && a.steps[ci].type === "kid") idx = ci;
+    const step = a.steps[idx]; const k = step?.kid;
+    if (!k) return done("Pour quel enfant ?", "Pour quel enfant ? Dites par exemple : appeler la maman de Léa.");
+    const cs = (k.contacts||[]).filter(c => c.tel);
+    if (!cs.length) return done("Pas de numéro pour la famille de " + k.prenom);
+    const want = [["mere","maman"],["pere","papa"],["grand mere","mamie","mami"],["grand pere","papi","papy"],["nounou","assistante"],["educ","referent"],["tuteur","tutrice"],["accueil"],["legal","representant"],["frere","soeur"],["oncle","tante"],["voisin"],["travail","bureau"],["fixe","maison"]];
+    let c = null;
+    for (const ws of want) if (ws.some(w => t.includes(w))){ c = cs.find(x => ws.some(w => norm((x.lien||"")+" "+(x.nom||"")+" "+(x.type||"")).includes(w))); if (c) break; }
+    c = c || cs.find(x => x.nom && t.includes(" " + norm(x.nom).split(" ").pop() + " ")) || cs[0];
+    const who = contactLabel(c);
+    if (isCall && !isMsg) return offer(telHref(c.tel), `📞 Appeler ${esc(who)}`, "callf");
+    let key;
+    if (has(/devant|suis la/)) key = "devant";
+    else if (has(/j arrive|bientot|en route/)) key = a.sens === "soir" ? "avantSoir" : "avantMatin";
+    else if (step.at) key = a.sens === "soir" ? "valideSoir" : "valideMatin";
+    else key = a.sens === "soir" ? "avantSoir" : "avantMatin";
+    const heure = step.at ? hmInput(step.at) : (k.heureMatin || "");
+    return offer(smsHref(c.tel, fill(S.tpl[key], k, heure)), `💬 SMS à ${esc(who)}`, "smsf");
+  }
+  done(`« ${text.trim()} » : je n'ai pas compris`, "Je n'ai pas compris. Touchez le point d'interrogation pour voir les commandes.");
+}
+/* ---------- mode mains libres : écoute continue + phrase clé ---------- */
+let handsFree = false, hfPaused = false, hfBuf = "", hfArmed = false, hfTimer = null;
+function wakeRe(){
+  let w = norm(S.wake || "ok tournée").trim().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ");
+  w = w.split(" ").map(x => x === "ok" || x === "okay" ? "(?:ok|okay|o k|oke|hockey)" : x).join("[\\s,.!?-]*");
+  return new RegExp(w);
+}
+function hfFinal(text){
+  hfBuf = (hfBuf + " " + text).trim();
+  const n = norm(hfBuf); const m = n.match(wakeRe());
+  if (m){ hfArmed = true; hfBuf = n.slice(m.index + m[0].length).trim(); }
+  else if (!hfArmed){ hfBuf = hfBuf.split(" ").slice(-4).join(" "); return; }   // on ne garde que les derniers mots
+  heard = "👂 " + (hfBuf || "Je vous écoute…"); renderVoice();
+  clearTimeout(hfTimer);
+  hfTimer = setTimeout(() => {
+    const cmd = hfBuf.trim(); hfBuf = ""; hfArmed = false;
+    voiceAction = null;
+    if (cmd) voiceCommand(cmd); else { heard = ""; renderVoice(); }
+  }, hfBuf ? 900 : 6000);
+}
+function toggleHandsFree(){
+  if (!dict) return;
+  if (handsFree && !hfPaused){ handsFree = false; hfArmed = false; hfBuf = ""; dict.stop().catch(()=>{}); heard = ""; renderVoice(); toast("Mains libres désactivé"); return; }
+  handsFree = true; hfPaused = false; hfBuf = ""; hfArmed = false; heard = ""; voiceAction = null;
+  try { tts?.stop(); } catch(e){}
+  dict.start({ language:"fr" }).then(() => toast(`Mains libres activé : dites « ${S.wake || "OK tournée"} » puis la commande`)).catch(err => {
+    if (err?.code === "not_granted" || err?.code === "unavailable"){ handsFree = false; toast("Micro indisponible"); }
+    else hfPaused = true;
+    renderVoice();
+  });
+  renderVoice();
+}
+async function initVoice(){
+  try { tts = await window.claude?.use?.("tts"); } catch(e){ tts = null; }
+  try {
+    dict = VOICE_ON ? await window.claude?.use?.("dictation") : null;
+    if (!dict) { render(); return; }
+    voiceAvailable = true;
+    let buffer = "", endTimer = null;
+    dict.onPartial(({text}) => {
+      if (!text) return;
+      if (handsFree){ if (hfArmed || wakeRe().test(norm(hfBuf + " " + text))){ heard = "👂 " + text.trim(); renderVoice(); clearTimeout(hfTimer); } return; }
+      heard = (buffer + " " + text).trim(); renderVoice(); clearTimeout(endTimer);
+    });
+    dict.onFinal(({text}) => {
+      if (handsFree){ hfFinal(text); return; }
+      buffer = (buffer + text).trim(); heard = buffer; renderVoice();
+      // arrêt automatique après une courte pause
+      clearTimeout(endTimer); endTimer = setTimeout(() => { if (listening) dict.stop().catch(()=>{}); }, 1200);
+    });
+    dict.onState(({state, reason}) => {
+      listening = state !== "idle";
+      if (state === "idle"){
+        if (handsFree){
+          hfBuf = ""; hfArmed = false;
+          if (reason === "unavailable" || reason === "not_granted"){ handsFree = false; voiceAvailable = false; toast("Commande vocale indisponible"); render(); }
+          else if (reason !== "stopped"){ hfPaused = true; }       // écran quitté, limite de temps… : reprise d'un toucher
+        } else {
+          const said = buffer; buffer = "";
+          if (said) voiceCommand(said);
+          if (reason === "unavailable" || reason === "not_granted"){ voiceAvailable = false; toast("Commande vocale indisponible"); render(); }
+        }
+      }
+      renderVoice();
+    });
+    render();
+  } catch(e){}
+}
+let micTimer = null;
+function toggleMic(){
+  if (!dict) return;
+  if (handsFree){ toggleHandsFree(); return; }
+  if (listening){ dict.stop().catch(()=>{}); return; }
+  try { tts?.stop(); } catch(e){}
+  heard = ""; voiceAction = null;
+  dict.start({ language:"fr" }).catch(err => {
+    listening = false;
+    if (err?.code === "unavailable"){ dict.start().catch(()=>{ voiceAvailable = false; render(); }); return; }
+    if (err?.code === "not_granted"){ voiceAvailable = false; toast("Micro refusé"); render(); }
+  });
+  clearTimeout(micTimer); micTimer = setTimeout(() => { if (listening) dict.stop().catch(()=>{}); }, 8000);
+}
+
+/* =========================================================
+   Événements
+   ========================================================= */
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  view = b.dataset.v;
+  render(); window.scrollTo(0,0);
+});
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]"); if (!el) return;
+  const a = el.dataset.act;
+  if (a === "closeBg"){ if (e.target === el) closeSheet(); return; }
+  if (a === "prepToggle" || a === "histStart" || a === "histEnd") return;
+  const i = Number(el.dataset.i), id = el.dataset.id;
+  switch (a){
+    case "close": closeSheet(); break;
+    case "back": sub = null; render(); window.scrollTo(0,0); break;
+    case "newTour": { const t = { id:uid(), nom:"Tournée " + (S.tournees.length+1), etab:{nom:"",adresse:"",tel:"",horaires:{}}, responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
+    case "saveTour": { const t = tour(sub.id);
+      if (!t.nom.trim()){ toast("Donnez un nom à la tournée"); break; }
+      if (!t.etab.adresse) toast("Tournée enregistrée ✓ (pensez à l'adresse de l'établissement)"); else toast("Tournée enregistrée ✓");
+      clearTimeout(saveTimer); save(); flush(); sub = null; render(); window.scrollTo(0,0); break; }
+    case "editTour": sub = {type:"edit", id}; render(); window.scrollTo(0,0); break;
+    case "delTour": confirmSheet("Supprimer cette tournée ?", "Les enfants qu'elle contient seront supprimés. L'historique est conservé.", "delTourOk", "Oui, supprimer"); break;
+    case "delTourOk": S.tournees = S.tournees.filter(t => t.id !== sub.id); sub = null; save(); closeSheet(); render(); break;
+    case "addKid": kidForm(-1); break;
+    case "editKid": kidForm(i); break;
+    case "saveKid": saveKid(); break;
+    case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
+      if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
+      editKid.absences = [...(editKid.absences||[]), { id: uid(), du, au: au && au !== du ? au : "", sens: document.getElementById("ab_sens").value, motif: document.getElementById("ab_motif").value.trim() }];
+      drawKidForm(); toast("Absence ajoutée — pensez à Enregistrer"); break; }
+    case "delAbs": readKidForm(); editKid.absences = (editKid.absences||[]).filter(x => x.id !== id); drawKidForm(); break;
+    case "addContact": readKidForm(); editKid.contacts.push({nom:"",lien:"",tel:"",type:"Portable"}); drawKidForm(); setTimeout(() => { const r = document.querySelectorAll("#contacts [data-ci]"); r[r.length-1]?.scrollIntoView({block:"center"}); r[r.length-1]?.querySelector("[data-c=lien]")?.focus(); }, 50); break;
+    case "delContact": readKidForm(); editKid.contacts.splice(Number(el.dataset.j),1); drawKidForm(); break;
+    case "delKid": confirmSheet(`Retirer ${esc(editKid.prenom)} ?`, "L'enfant sera retiré de cette tournée.", "delKidOk", "Oui, retirer"); break;
+    case "delKidOk": tour(sub.id).enfants.splice(editKidIndex,1); save(); closeSheet(); render(); break;
+    case "kUp": case "kDown": { const arr = tour(sub.id).enfants; const j = a === "kUp" ? i-1 : i+1; if (j>=0 && j<arr.length){ [arr[i],arr[j]] = [arr[j],arr[i]]; save(); render(); } break; }
+    case "sortTime": { const arr = tour(sub.id).enfants; arr.sort((x,y) => (x.heureMatin||"99:99").localeCompare(y.heureMatin||"99:99")); save(); render(); toast("Trié par heure de ramassage"); break; }
+    case "prep": { const t = tour(id); const s = el.dataset.sens; const ids = eligible(t, s).map(k => k.id); const td = dayKey(new Date());
+      const prev = eligible(t, s).filter(k => absentPrevu(k, td, s)).map(k => k.id);
+      sub = {type:"prep", id, sens:s, present: ids.filter(x => !prev.includes(x)), order: ids.slice(), reorder:false};
+      if (prev.length) toast(`${prev.length} absence${prev.length>1?"s":""} prévue${prev.length>1?"s":""} déjà décochée${prev.length>1?"s":""}`); render(); window.scrollTo(0,0); break; }
+    case "prepReorder": sub.reorder = !sub.reorder; render(); break;
+    case "pUp": case "pDown": { e.preventDefault(); const o = sub.order; const j = a === "pUp" ? i-1 : i+1; if (j>=0 && j<o.length){ [o[i],o[j]] = [o[j],o[i]]; render(); } break; }
+    case "prepUsual": sub.order = eligible(tour(sub.id), sub.sens).map(k => k.id); render(); break;
+    case "prepKeep": saveOrderPermanent(tour(sub.id), sub.sens, sub.order); save(); render(); toast("Nouvel ordre enregistré pour les prochaines fois ✓"); break;
+    case "runReorder": runReorder = !runReorder; render(); break;
+    case "rUp": case "rDown": {
+      const st = S.active.steps; const mv = st.map((s,x) => (s.type === "kid" && !s.at) ? x : -1).filter(x => x >= 0);
+      const p = mv.indexOf(i); const q = a === "rUp" ? p-1 : p+1; if (q < 0 || q >= mv.length) break;
+      [st[mv[p]], st[mv[q]]] = [st[mv[q]], st[mv[p]]]; save(); render(); break; }
+    case "soirAuto": tour(sub.id).ordreSoir = null; save(); render(); break;
+    case "soirCustom": { const t = tour(sub.id); t.ordreSoir = eligible(t, "soir").map(k => k.id); save(); render(); break; }
+    case "sUp": case "sDown": { const t = tour(sub.id); const o = eligible(t, "soir").map(k => k.id); const j = a === "sUp" ? i-1 : i+1; if (j>=0 && j<o.length){ [o[i],o[j]] = [o[j],o[i]]; t.ordreSoir = o; save(); render(); } break; }
+    case "prepAll": sub.present = sub.order.slice(); render(); break;
+    case "prepNone": sub.present = []; render(); break;
+    case "startRun": startRun(); break;
+    case "validate": if (el.tagName === "A") setTimeout(() => validateStep(i), 0); else validateStep(i); break;
+    case "validateArr": { const go = () => { closeSheet(); validateStep(i); setTimeout(scrollToCurrent, 100); }; if (el.tagName === "A") setTimeout(go, 0); else go(); break; }
+    case "toggleAuto": S.modeAuto = !S.modeAuto; navPending = false; save(); render(); toast(S.modeAuto ? "Mode Android Auto activé" : "Mode Android Auto désactivé"); break;
+    case "finishArr": closeSheet(); finishRun(); break;
+    case "msgs": msgsSheet(i); break;
+    case "finish": finishRun(); break;
+    case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
+    case "copyMon": { const e2 = tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
+    case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
+      setNext({ tourneeId:tid, sens, date:dk, heure: defaultHeure(tour(tid), sens, dk) }); break; }
+    case "planNo": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const t = tour(tid);
+      // la tournée proposée n'a pas lieu : on propose la suivante
+      let dk = el.dataset.date, sens = el.dataset.sens;
+      if (sens === "soir"){ dk = nextSchoolDay(t, dk); sens = "matin"; } else { sens = "soir"; }
+      planForm({ tourneeId:tid, date:dk, sens }); break; }
+    case "planOpen": { const t = S.tournees[0]; const now = new Date(); const td = dayKey(now);
+      const dk = now.getHours() < 12 && isSchoolDay(t, td) ? td : nextSchoolDay(t, td);
+      planForm({ tourneeId:t?.id, date: now.getHours() >= 12 && now.getHours() < 16 && isSchoolDay(t, td) ? td : dk, sens: now.getHours() >= 12 && now.getHours() < 16 && isSchoolDay(t, td) ? "soir" : "matin" }); break; }
+    case "planSave": { const tid = document.getElementById("pf_t").value, dk = document.getElementById("pf_d").value, sens = document.getElementById("pf_s").value, hh = document.getElementById("pf_h").value;
+      if (!tid || !dk || !hh){ toast("Renseignez la date et l'heure"); break; }
+      setNext({ tourneeId:tid, sens, date:dk, heure:hh }); break; }
+    case "help": helpSheet(); break;
+    case "codeOk": { const v = document.getElementById("codeIn").value.trim(); if (!v) break;
+      try { localStorage.setItem(LS_CODE, v); } catch(e){}
+      closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
+    case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "report": rep = null; reportSheet(); break;
+    case "repMode": rep.mode = id; reportSheet(); break;
+    case "repPdf": saveReport("pdf"); break;
+    case "repPng": saveReport("png"); break;
+    case "repText": copyText(repText()); break;
+    case "voiceHelp": voiceHelpSheet(); break;
+    case "handsFree": toggleHandsFree(); break;
+    case "absentStep": skipSheet(i); break;
+    case "pickupList": pickupSheet(i); break;
+    case "pickupOk": if (el.tagName === "A") setTimeout(confirmPickup, 0); else confirmPickup(); break;
+    case "absentGo": { const go = () => { closeSheet(); markAbsent(i); setTimeout(scrollToCurrent, 100); }; if (el.tagName === "A") setTimeout(go, 0); else go(); break; }
+    case "calCreate": createCalEvent(); break;
+    case "exportContacts": exportContacts(); break;
+    case "agendaNext": if (S.next) agendaSheet(S.next); break;
+    case "editNext": if (S.next) planForm(S.next); break;
+    case "clearNext": S.next = null; save(); render(); break;
+    case "abortOk": S.active = null; focusKidStep = null; save(); closeSheet(); render(); break;
+    case "copy": copyText(el.dataset.text); break;
+    case "mic": toggleMic(); break;
+    case "histOpen": openHist = openHist === id ? null : id; render(); break;
+    case "histDel": confirmSheet("Supprimer cette tournée de l'historique ?", "Cette action est définitive.", "histDelOk", "Supprimer"); pendingDel = id; break;
+    case "histDelOk": { const [mk] = findHist(pendingDel); if (mk){ H[mk] = H[mk].filter(x => x.id !== pendingDel); saveHist(mk); } closeSheet(); render(); break; }
+    case "exportHist": {
+      const items = (H[histMonth]||[]).slice().sort((a,b) => a.start > b.start ? 1 : -1);
+      const lines = ["Date;Tournée;Trajet;Début;Dernier arrêt;Fin (retour);Durée (min);Durée;Dont retour (min);Enfants;Remplacement de;Responsable"].concat(items.map(e =>
+        [e.date.split("-").reverse().join("/"), e.tourneeNom, e.sens, hm(e.start), e.dernierArret ? hm(e.dernierArret) : "", hm(e.end), e.duree, durTxt(e.duree), e.retour ?? "", e.nb, e.remplace || "", e.responsable || ""].join(";")));
+      lines.push(`Total;;;;;;${items.reduce((s,e)=>s+(e.duree||0),0)};${durTxt(items.reduce((s,e)=>s+(e.duree||0),0))};;;;`);
+      copyText(lines.join("\n")); break;
+    }
+    case "resetTpl": S.tpl = {...DEFAULT_TPL}; save(); render(); toast("Messages réinitialisés"); break;
+    case "export": copyText(JSON.stringify({ state:S, hist:H })); break;
+    case "import":
+      openSheet(`<h2>Restaurer une sauvegarde</h2><p class="small muted">Collez le texte de sauvegarde. Il remplacera les données actuelles.</p>
+        <textarea class="t" id="importTxt" style="min-height:180px"></textarea>
+        <div class="row" style="margin-top:10px"><button class="btn primary" data-act="importOk">Restaurer</button><button class="btn" data-act="close">Annuler</button></div>`); break;
+    case "importOk":
+      try {
+        const o = JSON.parse(document.getElementById("importTxt").value);
+        S = normalize(o.state || o); if (o.hist){ H = o.hist; Object.keys(H).forEach(saveHist); }
+        save(); closeSheet(); sub = null; render(); toast("Sauvegarde restaurée ✓");
+      } catch(err){ toast("Texte de sauvegarde invalide"); }
+      break;
+  }
+});
+let pendingDel = null, pendingAbsent = null;
+
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.c === "lien"){ const box = t.closest("[data-ci]").querySelector("[data-autre]"); box.style.display = t.value === "__autre" ? "" : "none"; if (t.value === "__autre") box.querySelector("input").focus(); return; }
+  if (t.dataset.act === "prepToggle"){
+    const id = t.dataset.id;
+    sub.present = t.checked ? [...new Set([...sub.present, id])] : sub.present.filter(x => x !== id);
+    render(); return;
+  }
+  if (t.dataset.act === "histStart" || t.dataset.act === "histEnd"){
+    const [mk, en] = findHist(t.dataset.id); if (!en || !t.value) return;
+    const key = t.dataset.act === "histStart" ? "start" : "end";
+    const d = new Date(en[key]); const [hh,mm] = t.value.split(":").map(Number); d.setHours(hh, mm, 0, 0);
+    en[key] = d.toISOString(); en.duree = Math.max(0, Math.round(minsBetween(en.start, en.end)));
+    saveHist(mk); render(); toast("Horaire corrigé"); return;
+  }
+  if (t.id === "histMonth"){ histMonth = t.value; openHist = null; render(); return; }
+  if (t.id === "rep_month"){ rep.month = t.value; reportSheet(); return; }
+  if (t.id === "rep_week"){ if (t.value) rep.week = t.value; reportSheet(); return; }
+  if (t.dataset.repday){ const d = t.dataset.repday; rep.days = t.checked ? [...new Set([...rep.days, d])] : rep.days.filter(x => x !== d); const sc = t.closest("div[style*=overflow]")?.scrollTop; reportSheet(); const box = document.querySelector(".sheet div[style*=overflow]"); if (box && sc) box.scrollTop = sc; return; }
+  if (t.dataset.pick){ t.closest(".pick").classList.toggle("off", !t.checked); updatePickup(); return; }
+  if (t.id === "pf_t" || t.id === "pf_d" || t.id === "pf_s"){ updatePlanInfo(true); return; }
+  if (t.dataset.hor){
+    const [d, k] = t.dataset.hor.split("."); const e2 = tour(sub.id).etab;
+    e2.horaires[d] = Object.assign({debut:"",fin:""}, e2.horaires[d]||{}); e2.horaires[d][k] = t.value; save(); return;
+  }
+  if (t.dataset.tf){
+    const tr = tour(sub.id); const path = t.dataset.tf.split(".");
+    const val = t.type === "checkbox" ? t.checked : t.value.trim();
+    if (path.length === 2){ tr[path[0]] = tr[path[0]] || {}; tr[path[0]][path[1]] = val; } else tr[path[0]] = val;
+    save(); if (t.type === "checkbox") render(); return;
+  }
+  if (t.dataset.setb){ S[t.dataset.setb] = t.checked; save(); toast(t.checked ? "Activé" : "Désactivé"); return; }
+  if (t.dataset.set){ S[t.dataset.set] = t.value.trim(); save(); toast("Enregistré ✓"); if (t.dataset.set === "domicile") render(); return; }
+  if (t.dataset.tpl){ S.tpl[t.dataset.tpl] = t.value; save(); toast("Enregistré ✓"); return; }
+});
+
+// chronomètre de la tournée en cours
+setInterval(() => { const el = document.getElementById("elapsed"); if (el && S.active) el.textContent = durTxt(minsBetween(S.active.start, new Date())); }, 15000);
+
+render();
+connectDb();
+initVoice();
+(async () => { try { mcpNs = await window.claude?.use?.("mcp"); } catch(e){} try { dlNs = await window.claude?.use?.("downloads"); } catch(e){} })();
+</script>
+</body>
+</html>
