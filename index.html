@@ -192,7 +192,10 @@ function absentPrevu(k, dk, sens){
 }
 function altDaysTxt(x){
   const f = arr => (arr||[]).slice().sort().map(d => JOURS_LONG[d]).join(", ");
-  return [x.matin?.length ? "☀️ matin : " + f(x.matin) : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
+  const j = [x.matin?.length ? "☀️ matin : " + f(x.matin) : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
+  if (!x.alterne) return j;
+  const td = dayKey(new Date());
+  return `${j} · <b>une semaine sur deux</b> (${altWeekOn(x, td) ? "dont cette semaine" : "pas cette semaine, la suivante oui"})`;
 }
 function absTxt(x){
   const per = x.au && x.au !== x.du ? `du ${dFr(x.du)} au ${dFr(x.au)}` : `le ${dFr(x.du)}`;
@@ -634,9 +637,16 @@ function knownEtabs(){
   return [...m.values()].sort((a, b) => (a.nom || "").localeCompare(b.nom || "", "fr"));
 }
 // autre adresse selon le jour (ex. chez sa mère le vendredi soir et le lundi matin)
+function altWeekOn(x, dk){   // garde alternée : vrai les semaines concernées
+  if (!x.alterne) return true;
+  const w = Math.round((new Date(mondayOf(dk) + "T12:00:00") - new Date(mondayOf(x.alterne) + "T12:00:00")) / (7 * 864e5));
+  return ((w % 2) + 2) % 2 === 0;
+}
 function altFor(k, dk, sens){
   const wd = new Date(dk + "T12:00:00").getDay();
-  return (k.altAdr || []).find(x => (x[sens] || []).includes(wd) && x.adresse) || null;
+  // si plusieurs adresses correspondent, la plus précise (le moins de jours cochés) l'emporte
+  const nb = x => (x.matin || []).length + (x.soir || []).length;
+  return (k.altAdr || []).filter(x => x.adresse && (x[sens] || []).includes(wd) && altWeekOn(x, dk)).sort((a, b) => nb(a) - nb(b))[0] || null;
 }
 function effKid(k, dk, sens){
   const c = JSON.parse(JSON.stringify(k)); const x = altFor(k, dk, sens);
@@ -1596,9 +1606,13 @@ function drawKidForm(){
         <label class="f">Nom de l'adresse</label><input class="t" id="alt_lib" placeholder="ex. Chez sa mère">
         <label class="f">Adresse complète</label>${addrField('id="alt_adr"', "", "Rue, code postal, ville")}
         ${gpsField('id="alt_gps"', "")}
-        <label class="f">☀️ Ramassage ici le matin, le :</label>
+        <label class="f">Quelles semaines ?</label>
+        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="all" checked> Toutes les semaines</label>
+        <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="alt"> Une semaine sur deux, dont la semaine du
+          <input class="t" type="date" id="alt_ref" value="${mondayOf(dayKey(new Date()))}" style="width:auto;padding:6px"></label>
+        <label class="f">☀️ Ramassage ici le matin, le : <a href="#" class="small" data-act="altAll" data-id="altm">tous</a></label>
         <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
-        <label class="f">🌙 Dépôt ici le soir, le :</label>
+        <label class="f">🌙 Dépôt ici le soir, le : <a href="#" class="small" data-act="altAll" data-id="alts">tous</a></label>
         <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}"> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
         <button class="btn go w100" style="margin-top:10px" data-act="addAlt">Ajouter cette adresse</button>
       </div></details>
@@ -1950,8 +1964,10 @@ document.addEventListener("click", e => {
       const m = [...document.querySelectorAll("[data-altm]:checked")].map(c => Number(c.dataset.altm));
       const so = [...document.querySelectorAll("[data-alts]:checked")].map(c => Number(c.dataset.alts));
       if (!adr){ toast("Indiquez l'adresse"); break; } if (!m.length && !so.length){ toast("Cochez au moins un jour"); break; }
-      editKid.altAdr = [...(editKid.altAdr||[]), { id: uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so }];
+      const alt = document.querySelector("input[name=alt_wk]:checked")?.value === "alt" ? (document.getElementById("alt_ref").value || dayKey(new Date())) : "";
+      editKid.altAdr = [...(editKid.altAdr||[]), { id: uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt }];
       drawKidForm(); toast("Adresse ajoutée — pensez à Enregistrer"); break; }
+    case "altAll": { e.preventDefault(); const boxes = [...document.querySelectorAll(`[data-${id}]`)].filter(c => Number(c.dataset[id]) <= 5); const on = !boxes.every(c => c.checked); boxes.forEach(c => c.checked = on); break; }
     case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); drawKidForm(); break;
     case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
       if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
