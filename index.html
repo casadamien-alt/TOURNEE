@@ -266,7 +266,7 @@ function normalize(st){
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
   st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
-  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi,
+  st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
     ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
@@ -515,7 +515,9 @@ function arriveSheet(){
 }
 /* ---------- soir : liste des enfants confirmée à l'établissement ---------- */
 let pickupIdx = -1;
-function pickupKidsOf(a, i){ const e = a.steps[i]; return a.steps.filter(s => s.type === "kid" && !s.at && (!e || !Array.isArray(e.kids) || e.kids.includes(s.kid.id))); }
+function pickupKidsOf(a, i){ const e = a.steps[i];
+  if (a.sens === "midi") return (e?.kids || []).map(id => ({ type:"kid", kid: kidById(a, id) })).filter(x => x.kid);
+  return a.steps.filter(s => s.type === "kid" && !s.at && (!e || !Array.isArray(e.kids) || e.kids.includes(s.kid.id))); }
 function pickupSheet(i){
   const a = S.active; if (!a) return; pickupIdx = i;
   const kids = pickupKidsOf(a, i); const e = SE(a.steps[i], a);
@@ -545,6 +547,11 @@ function confirmPickup(){
   const mine = pickupKidsOf(a, pickupIdx).map(s => s.kid.id);
   const absents = a.steps.filter(s => s.type === "kid" && mine.includes(s.kid.id) && !ok.includes(s.kid.id));
   a.steps = a.steps.filter(s => !(s.type === "kid" && mine.includes(s.kid.id) && !ok.includes(s.kid.id)));
+  if (a.sens === "midi"){
+    const out = mine.filter(id => !ok.includes(id));
+    a.steps.forEach(s => { if (Array.isArray(s.kids)) s.kids = s.kids.filter(id => !out.includes(id)); });
+    a.absents = [...(a.absents||[]), ...out.map(id => kidName(kidById(a, id) || {prenom:"?"}))];
+  }
   a.absents = [...(a.absents||[]), ...absents.map(s => kidName(s.kid))];
   if (e && e.type === "etab" && !e.at) e.at = new Date().toISOString();
   closeSheet(); save(); render(); setTimeout(scrollToCurrent, 100);
@@ -592,6 +599,7 @@ function releaseAwake(){ try { wakeLock?.release(); } catch(e){} wakeLock = null
    Tournée en cours
    ========================================================= */
 function eligible(t, sens){
+  if (sens === "midi") return t.enfants.filter(k => k.midi === true);   // trajet de midi : enfants cochés « Midi »
   const list = t.enfants.filter(k => sens === "matin" ? k.matin !== false : k.soir !== false);
   if (sens === "matin") return list;
   const rev = list.slice().reverse();                        // le soir : ordre inverse du matin…
@@ -612,6 +620,7 @@ function startRun(){
   const kids = prepKids().filter(k => sub.present.includes(k.id));
   if (!kids.length){ toast("Cochez au moins un enfant"); return; }
   const today = dayKey(new Date());
+  if (sens === "midi") return startMidi(t, kids);
   const steps = kids.map(k => ({ type:"kid", kid: effKid(k, today, sens), at:null }));
   // une étape par établissement concerné, avec ses enfants (matin : après les ramassages ; soir : avant les dépôts)
   const etabSteps = t.etabs.map(e => ({ type:"etab", etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
@@ -627,7 +636,10 @@ function startRun(){
   sub = null; save(); render(); window.scrollTo(0,0); keepAwake();
   toast("Tournée lancée à " + hm(S.active.start));
 }
-function etabRef(a, e){ const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
+function etabRef(a, e){ if (a.sens === "midi") return ""; const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
+function sensIcon(x){ return x === "matin" ? "☀️" : x === "midi" ? "🕛" : "🌙"; }
+function sensNom(x){ return x === "matin" ? "matin" : x === "midi" ? "midi" : "soir"; }
+function kidById(a, id){ const st = a.steps.find(x => x.type === "kid" && x.kid.id === id); return st ? st.kid : (a.kidsRef || []).find(k => k.id === id); }
 function SE(s, a){ return (s && s.etab) || a.etab; }   // établissement de l'étape (plusieurs établissements possibles)
 function etabKey(e){ return ((e.nom || "") + "|" + (e.adresse || "")).trim().toLowerCase(); }
 // établissements déjà saisis dans toutes les tournées (sans doublon)
@@ -654,6 +666,20 @@ function effKid(k, dk, sens){
   return c;
 }
 function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
+// trajet de midi : récupérer les enfants dans leur(s) établissement(s), puis les déposer à l'établissement d'arrivée
+function startMidi(t, kids){
+  const dest = t.etabs.find(e => e.id === t.midiDest) || t.etabs[t.etabs.length - 1];
+  const steps = t.etabs.filter(e => e.id !== dest.id).map(e => ({ type:"etab", pickup:true, etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
+  // enfants dont l'établissement est déjà la destination : rien à récupérer ailleurs
+  steps.push({ type:"etab", pickup:false, etab: JSON.parse(JSON.stringify(dest)), kids: kids.map(k => k.id), at:null });
+  S.active = { id: uid(), tourneeId:t.id, tourneeNom:t.nom, etab:{...t.etab}, sens:"midi",
+    responsable: {...(t.responsable||{})}, remplace: remplActif(t) ? t.remplacement.nom : "",
+    start: new Date().toISOString(), steps, kidsRef: kids.map(k => JSON.parse(JSON.stringify(k))),
+    absents: eligible(t, "midi").filter(k => !sub.present.includes(k.id)).map(k => kidName(k)) };
+  if (S.next && S.next.tourneeId === t.id && S.next.sens === "midi") S.next = null;
+  sub = null; save(); render(); window.scrollTo(0,0); keepAwake();
+  toast("Trajet de midi lancé à " + hm(S.active.start));
+}
 function curIndex(){ const a = S.active; return a ? a.steps.findIndex(s => !s.at) : -1; }
 function validateStep(i, fromVoice){
   const a = S.active; const s = a.steps[i]; if (!s) return;
@@ -675,7 +701,7 @@ function finishRun(){
   const entry = {
     id: a.id, date: dayKey(a.start), tourneeId: a.tourneeId, tourneeNom: a.tourneeNom, etab: [...new Set(a.steps.filter(s => s.type === "etab").map(s => SE(s, a)?.nom).filter(Boolean))].join(", ") || a.etab?.nom || "",
     sens: a.sens, start: a.start, end, duree: Math.round(minsBetween(a.start, end)),
-    nb: a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
+    nb: a.sens === "midi" ? (a.steps[a.steps.length-1]?.kids || []).length : a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
     remplace: a.remplace || "", responsable: a.responsable?.nom || "",
     etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (SE(s, a)?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
     dernierArret: a.steps[a.steps.length-1]?.at || null,
@@ -687,7 +713,7 @@ function finishRun(){
   S.active = null; save(); saveHist(mk);
   focusKidStep = null; runReorder = false; handsFree = false; hfPaused = false; stopVoice(); releaseAwake();
   openSheet(`<div style="text-align:center"><div style="font-size:52px">🏁</div><h2>Tournée terminée</h2>
-    <p class="muted">${esc(entry.tourneeNom)} · ${entry.sens === "matin" ? "☀️ matin" : "🌙 soir"}</p>
+    <p class="muted">${esc(entry.tourneeNom)} · ${sensIcon(entry.sens)} ${sensNom(entry.sens)}</p>
     <div class="timer"><div><span class="small muted">Début</span><b>${hm(entry.start)}</b></div><div><span class="small muted">Fin</span><b>${hm(entry.end)}</b></div><div><span class="small muted">Durée</span><b>${durTxt(entry.duree)}</b></div></div>
     <p class="small muted">Enregistrée dans l'onglet Historique.</p></div>
     ${proposalHtml(entry)}`);
@@ -741,6 +767,7 @@ function gcalUrl(n){
   return "https://calendar.google.com/calendar/render?" + p.toString();
 }
 function proposalHtml(e){
+  if (e.sens === "midi") return `<button class="btn primary lg" data-act="close">OK</button>`;
   const t = tour(e.tourneeId);
   let q, sens, dk;
   if (e.sens === "matin"){ sens = "soir"; dk = e.date; const fin = t ? horaire(t.etab, e.date+"T12:00:00").fin : "";
@@ -888,8 +915,8 @@ function render(){
   const night = view === "tournees" && a && a.sens === "soir";
   hdr.className = night ? "night" : "";
   let title = "🚐 Ma tournée", subt = "";
-  if (view === "tournees" && a){ title = (a.sens === "matin" ? "☀️ " : "🌙 ") + esc(a.tourneeNom); subt = "Tournée en cours"; }
-  else if (view === "tournees" && sub?.type === "prep"){ const t = tour(sub.id); title = (sub.sens === "matin" ? "☀️ " : "🌙 ") + esc(t?.nom); subt = "Qui est présent ?"; }
+  if (view === "tournees" && a){ title = sensIcon(a.sens) + " " + esc(a.tourneeNom); subt = "Tournée en cours"; }
+  else if (view === "tournees" && sub?.type === "prep"){ const t = tour(sub.id); title = sensIcon(sub.sens) + " " + esc(t?.nom); subt = "Qui est présent ?"; }
   else if (view === "tournees" && sub?.type === "edit"){ title = "✏️ " + esc(tour(sub.id)?.nom || "Tournée"); }
   else if (view === "historique") title = "🕓 Historique";
   else if (view === "reglages") title = "⚙️ Réglages";
@@ -969,6 +996,7 @@ function renderHome(){
         <button class="btn sm" data-act="editTour" data-id="${t.id}">✏️ Modifier</button></div>
       <div class="row" style="margin-top:12px">
         <button class="btn brand grow" data-act="prep" data-id="${t.id}" data-sens="matin" ${nm?"":"disabled"}>☀️ Lancer le matin</button>
+        ${t.midiOn && t.etabs.length > 1 ? `<button class="btn grow" style="background:#e3f3ec;border-color:#bfe3d2" data-act="prep" data-id="${t.id}" data-sens="midi" ${t.enfants.some(k => k.midi === true)?"":"disabled"}>🕛 Lancer le midi</button>` : ""}
         <button class="btn night grow" data-act="prep" data-id="${t.id}" data-sens="soir" ${ns?"":"disabled"}>🌙 Lancer le soir</button>
       </div></div>`;
   });
@@ -979,6 +1007,12 @@ function renderHome(){
 
 /* ---------- Préparation : cocher les présents ---------- */
 function prepEtabCards(t){
+  if (sub.sens === "midi"){
+    const dest = t.etabs.find(e => e.id === t.midiDest) || t.etabs[t.etabs.length - 1]; const ks = prepKids();
+    const from = t.etabs.filter(e => e.id !== dest.id && ks.some(k => kidEtab(t, k).id === e.id));
+    return from.map(e => `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>1. Récupérer à ${esc(e.nom || "l'établissement")}</b><div class="addr">${esc(e.adresse)}</div></div></div>`).join("")
+      + `<div class="card row" style="background:var(--go-bg)"><span style="font-size:22px">🏁</span><div class="grow"><b>2. Déposer à ${esc(dest.nom || "l'établissement d'arrivée")}</b><div class="addr">${esc(dest.adresse)}</div></div></div>`;
+  }
   const list = sub.sens === "soir" ? t.etabs.slice().reverse() : t.etabs;
   return list.map(e => { const h = horaire(e, new Date()); const ref = sub.sens === "matin" ? h.debut : h.fin;
     const ks = prepKids().filter(k => kidEtab(t, k).id === e.id);
@@ -995,7 +1029,7 @@ function renderPrep(){
       <div class="row" style="margin-top:8px"><button class="btn sm ${sub.reorder?"primary":""}" data-act="prepReorder">↕️ ${sub.reorder?"Terminer l'ordre":"Changer l'ordre"}</button>
         ${changed ? `<span class="pill" style="background:#ffe7d6;color:var(--warn)">ordre modifié pour aujourd'hui</span>` : ""}</div>
       ${changed ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="prepKeep">💾 Garder cet ordre pour toujours</button><button class="btn sm" data-act="prepUsual">↺ Revenir à l'ordre habituel</button></div>` : ""}
-      <p class="small muted" style="margin:8px 0 0">${sub.sens === "matin" ? "Ordre de ramassage du matin, puis l'établissement." : "Départ de chez vous, 1re étape l'établissement, puis dépôt dans l'ordre inverse du matin, puis retour. Vous pourrez confirmer la liste des enfants présents en arrivant à l'établissement."}</p></div>`;
+      <p class="small muted" style="margin:8px 0 0">${sub.sens === "midi" ? "Trajet de midi : récupération dans l'établissement, puis dépôt dans l'établissement d'arrivée." : sub.sens === "matin" ? "Ordre de ramassage du matin, puis l'établissement." : "Départ de chez vous, 1re étape l'établissement, puis dépôt dans l'ordre inverse du matin, puis retour. Vous pourrez confirmer la liste des enfants présents en arrivant à l'établissement."}</p></div>`;
   if (sub.sens === "soir") h += prepEtabCards(t);
   kids.forEach((k, idx) => {
     const on = sub.present.includes(k.id);
@@ -1008,7 +1042,7 @@ function renderPrep(){
         ${(() => { const ab = absentPrevu(k, dayKey(new Date()), sub.sens); return ab ? `<div style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absence prévue${ab.motif ? " : " + esc(ab.motif) : ""}</span></div>` : ""; })()}
         ${com ? `<div class="small muted" style="margin-top:4px">${sub.sens==="matin"?"☀️":"🌙"} ${esc(com)}</div>` : ""}</div></label>`;
   });
-  if (sub.sens === "matin") h += prepEtabCards(t);
+  if (sub.sens === "matin" || sub.sens === "midi") h += prepEtabCards(t);
   h += `<button class="btn go lg" data-act="startRun" ${sub.present.length?"":"disabled"}>▶ Valider les présents et démarrer la tournée</button>
     <button class="btn w100" style="margin-top:8px" data-act="back">Annuler</button>`;
   return h;
@@ -1078,11 +1112,11 @@ function renderRun(){
     const cls = s.at ? "done" : (i === ci ? "current" : "later");
     if (s.type === "etab"){
       h += `<div class="card step ${cls}" id="step-${i}"><div class="row"><span class="num" style="background:var(--brand);color:var(--brand-ink)">🏫</span>
-        <div class="grow"><div class="name">${esc(SE(s, a).nom || "Établissement")}</div><div class="addr">📍 ${esc(SE(s, a).adresse || "—")}</div>${Array.isArray(s.kids) && a.steps.filter(x => x.type === "etab").length > 1 ? `<div class="small" style="font-weight:700;margin-top:3px">${night ? "Récupérer" : "Déposer"} : ${esc(s.kids.map(id => (a.steps.find(x => x.type === "kid" && x.kid.id === id) || {}).kid?.prenom).filter(Boolean).join(", ") || "—")}</div>` : ""}</div>${etabRef(a, SE(s, a)) ? `<span class="pill ${night?"s":"m"}">${night?"sortie":"cours"} ${hTxt(etabRef(a, SE(s, a)))}</span>` : ""}</div>
+        <div class="grow"><div class="name">${esc(SE(s, a).nom || "Établissement")}</div><div class="addr">📍 ${esc(SE(s, a).adresse || "—")}</div>${Array.isArray(s.kids) && (a.sens === "midi" || a.steps.filter(x => x.type === "etab").length > 1) ? `<div class="small" style="font-weight:700;margin-top:3px">${(s.pickup ?? night) ? "Récupérer" : "Déposer"} : ${esc(s.kids.map(id => kidById(a, id)?.prenom).filter(Boolean).join(", ") || "—")}</div>` : ""}</div>${etabRef(a, SE(s, a)) ? `<span class="pill ${night?"s":"m"}">${night?"sortie":"cours"} ${hTxt(etabRef(a, SE(s, a)))}</span>` : ""}</div>
         ${s.at && etabRef(a, SE(s, a)) ? (()=>{ const d=new Date(s.at); const late=(d.getHours()*60+d.getMinutes()) - toMinutes(etabRef(a, SE(s, a))); return `<div class="small" style="margin-top:6px;font-weight:800;color:${late>0?"var(--warn)":"var(--go)"}">${late>0?`⚠ Arrivé ${durTxt(late)} après ${night?"la fin":"le début"} des cours`:`✔ Arrivé ${durTxt(-late)} avant ${night?"la fin":"le début"} des cours`}</div>`; })() : ""}
         ${s.at ? `<div class="row" style="margin-top:10px"><span class="doneline grow">✔ Arrivé à ${hm(s.at)}</span><button class="btn sm" data-act="validate" data-i="${i}">Annuler</button></div>`
           : `<div class="actions row" style="margin-top:10px">${nav(SE(s, a)) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(SE(s, a)), []))}">🧭 Y aller</a>` : ""}${SE(s, a).tel ? `<a class="btn sm call" data-href="${esc(telHref(SE(s, a).tel))}">📞 Établissement</a>` : ""}</div>
-             ${night ? `<button class="validate" data-act="pickupList" data-i="${i}">☐ Enfants récupérés — confirmer la liste<span class="small" style="display:block;font-weight:700;opacity:.8">cochez les enfants présents dans le véhicule</span></button>`
+             ${(s.pickup ?? night) ? `<button class="validate" data-act="pickupList" data-i="${i}">☐ Enfants récupérés — confirmer la liste<span class="small" style="display:block;font-weight:700;opacity:.8">cochez les enfants présents dans le véhicule</span></button>`
                      : validateBtn(i, "Arrivé à l'établissement — valider")}`}
       </div>`;
       return;
@@ -1218,6 +1252,11 @@ function renderEdit(){
     <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
     ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
   </div>`).join("")}
+  ${t.etabs.length > 1 ? `<div class="card" style="background:#f3faf6;border-color:#bfe3d2"><h3>🕛 Trajet de midi</h3>
+    <label class="row" style="font-weight:800"><input type="checkbox" data-tf="midiOn" ${t.midiOn ? "checked" : ""} style="width:22px;height:22px"> Cette tournée a un trajet le midi, d'un établissement à un autre</label>
+    ${t.midiOn ? `<label class="f">Établissement d'arrivée le midi</label><select class="t" data-tf="midiDest">${t.etabs.map(e => `<option value="${e.id}" ${e.id === (t.midiDest || t.etabs[t.etabs.length-1].id) ? "selected" : ""}>${esc(e.nom || "Établissement")}</option>`).join("")}</select>
+      <p class="small muted" style="margin:6px 0 0">Les enfants cochés « Midi » dans leur fiche sont récupérés dans leur établissement puis déposés ici.${t.enfants.some(k => k.midi === true) ? " Concernés : " + t.enfants.filter(k => k.midi === true).map(k => esc(k.prenom)).join(", ") : " <b>Aucun enfant coché « Midi » pour l'instant.</b>"}</p>` : ""}
+  </div>` : ""}
   ${t.multi ? `<button class="btn w100" style="margin-bottom:12px" data-act="addEtab">🏫 ＋ Ajouter un autre établissement</button>`
     : `<p class="small" style="margin:-4px 0 12px;text-align:center"><a href="#" data-act="addEtab">Cette tournée dessert finalement plusieurs établissements ?</a></p>`}
   <div class="card"><div class="row"><h3 class="grow" style="margin:0">👧 Enfants – ordre du matin</h3><button class="btn sm brand" data-act="addKid">➕ Ajouter</button></div>
@@ -1232,7 +1271,7 @@ function renderEdit(){
         <div class="addr">📍 ${esc(k.adresse || "—")}</div>
         ${t.etabs.length > 1 ? `<div class="addr">🏫 ${esc(kidEtab(t, k).nom || "Établissement")}</div>` : ""}
         ${(k.altAdr||[]).map(x => `<div class="addr">🏠 ${esc(x.libelle || "Autre adresse")} — ${altDaysTxt(x)}</div>`).join("")}
-        <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
+        <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.midi===true && t.midiOn?'<span class="pill ok">🕛 midi</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
           <span class="small muted">${(k.contacts||[]).filter(c=>c.tel).length} contact(s)</span></div>
         ${(() => { const td = dayKey(new Date()); const nx = (k.absences||[]).filter(x => (x.au || x.du) >= td).sort((a,b) => a.du < b.du ? -1 : 1)[0]; return nx ? `<div style="margin-top:6px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absent ${esc(absTxt(nx))}</span></div>` : ""; })()}</div>
       <div class="ord" style="gap:6px"><button class="btn sm" data-act="editKid" data-i="${i}">✏️</button>${STANDALONE && (k.contacts||[]).some(c => c.tel) ? `<button class="btn sm" data-act="vcfKid" data-id="${k.id}" title="Ajouter aux contacts du téléphone">📇</button>` : ""}</div></div></div>`;
@@ -1275,7 +1314,7 @@ function repFile(ext){
 }
 function repRows(items){
   return items.map(e => { const d = new Date(e.start); return {
-    date: `${JOURS[d.getDay()]} ${dFr(e.date)}`, tournee: e.tourneeNom || "", trajet: e.sens === "matin" ? "Matin" : "Soir",
+    date: `${JOURS[d.getDay()]} ${dFr(e.date)}`, tournee: e.tourneeNom || "", trajet: e.sens === "matin" ? "Matin" : e.sens === "midi" ? "Midi" : "Soir",
     depart: hm(e.start), arrivee: hm(e.end), duree: durTxt(e.duree||0), nb: String(e.nb ?? ""), absents: (e.absents||[]).join(", ") || "—" }; });
 }
 function repMeta(items){
@@ -1484,7 +1523,7 @@ function renderHist(){
     if (e.date !== lastDay){ lastDay = e.date; h += `<div class="small muted" style="font-weight:900;margin:14px 2px 6px;text-transform:capitalize">${JOURS[d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}</div>`; }
     const open = openHist === e.id;
     h += `<div class="card"><div class="hist" data-act="histOpen" data-id="${e.id}">
-      <span style="font-size:24px">${e.sens==="matin"?"☀️":"🌙"}</span>
+      <span style="font-size:24px">${sensIcon(e.sens)}</span>
       <div class="grow"><div style="font-weight:900">${esc(e.tourneeNom)}</div><div class="small muted">${hm(e.start)} → ${hm(e.end)} · ${e.nb} enfant${e.nb>1?"s":""}${e.remplace ? " · 🔁 "+esc(e.remplace) : ""}</div></div>
       <span class="dur">${durTxt(e.duree)}</span></div>`;
     if (open){
@@ -1618,7 +1657,7 @@ function drawKidForm(){
     <label class="f">Adresse complète (rue, code postal, ville)</label>${addrField('id="k_adresse"', e.adresse, "12 rue des Lilas, 69003 Lyon")}
     ${gpsField('id="k_gps"', e.gps)}
     <div class="row"><div class="grow"><label class="f">Heure de ramassage le matin</label><input class="t" type="time" id="k_heure" value="${esc(e.heureMatin)}"></div>
-      <div class="grow"><label class="f">Transporté</label><div class="row" style="padding:8px 0"><label class="row"><input type="checkbox" id="k_matin" ${e.matin!==false?"checked":""}> Matin</label><label class="row" style="margin-left:10px"><input type="checkbox" id="k_soir" ${e.soir!==false?"checked":""}> Soir</label></div></div></div>
+      <div class="grow"><label class="f">Transporté</label><div class="row" style="padding:8px 0"><label class="row"><input type="checkbox" id="k_matin" ${e.matin!==false?"checked":""}> Matin</label>${tour(sub.id)?.midiOn ? `<label class="row" style="margin-left:10px"><input type="checkbox" id="k_midi" ${e.midi===true?"checked":""}> Midi</label>` : ""}<label class="row" style="margin-left:10px"><input type="checkbox" id="k_soir" ${e.soir!==false?"checked":""}> Soir</label></div></div></div>
     <label class="f">☀️ Mode de ramassage le matin</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
     <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
@@ -1663,6 +1702,7 @@ function readKidForm(){
   if (document.getElementById("k_etab")) e.etabId = document.getElementById("k_etab").value; e.heureMatin = g("k_heure");
   e.comMatin = g("k_comMatin"); e.comSoir = g("k_comSoir"); e.note = g("k_note");
   e.matin = document.getElementById("k_matin").checked; e.soir = document.getElementById("k_soir").checked;
+  if (document.getElementById("k_midi")) e.midi = document.getElementById("k_midi").checked;
   e.contacts = [...document.querySelectorAll("#contacts [data-ci]")].map(r => ({
     nom: r.querySelector("[data-c=nom]").value.trim(),
     lien: r.querySelector("[data-c=lien]").value === "__autre" ? r.querySelector("[data-c=autre]").value.trim() : r.querySelector("[data-c=lien]").value,
