@@ -239,6 +239,7 @@ function migrateEtab(e){
   delete e.heureDebut; delete e.heureFin;
   return e;
 }
+function linkEtabs(t){ t.etab = t.etabs[0]; t.enfants.forEach(k => { if (!t.etabs.some(e => e.id === k.etabId)) k.etabId = t.etabs[0].id; }); return t; }
 function normalize(st){
   if (!st || typeof st !== "object") return blankState();
   // migration depuis la 1re version (une seule liste d'enfants)
@@ -261,7 +262,7 @@ function normalize(st){
   st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
-    ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etab:migrateEtab(t.etab), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) }));
+    ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
   return st;
 }
 
@@ -368,7 +369,7 @@ function whoByTel(num){
   for (const t of S.tournees){
     if (t.responsable?.tel && telNorm(t.responsable.tel) === n) return `Responsable — ${t.responsable.nom || ""}`;
     if (t.remplacement?.tel && telNorm(t.remplacement.tel) === n) return `Personne remplacée — ${t.remplacement.nom || ""}`;
-    if (t.etab?.tel && telNorm(t.etab.tel) === n) return t.etab.nom || "Établissement";
+    for (const e of (t.etabs || [t.etab])) if (e?.tel && telNorm(e.tel) === n) return e.nom || "Établissement";
     for (const k of t.enfants) for (const c of (k.contacts||[])) if (c.tel && telNorm(c.tel) === n) return `${contactLabel(c)} (${k.prenom})`;
   }
   return "";
@@ -429,9 +430,9 @@ async function geocode(q){
 async function targetOf(ci){
   const a = S.active; if (!a) return null;
   if (ci < 0) return S.domicile ? { key: a.id + ":home", nom: "la maison", c: await geocode(S.domicile) } : null;
-  const s = a.steps[ci]; const o = s.type === "kid" ? s.kid : a.etab;
+  const s = a.steps[ci]; const o = s.type === "kid" ? s.kid : SE(s, a);
   const c = coordsOf(o.gps) || await geocode(o.adresse) || await geocode(o.gps);
-  return { key: a.id + ":" + (s.type === "kid" ? s.kid.id : "etab"), nom: s.type === "kid" ? s.kid.prenom : (a.etab.nom || "l'établissement"), c };
+  return { key: a.id + ":" + (s.type === "kid" ? s.kid.id : "etab-" + (SE(s, a).id || "")), nom: s.type === "kid" ? s.kid.prenom : (SE(s, a).nom || "l'établissement"), c };
 }
 function distM(a, b){ const R = 6371000, r = x => x * Math.PI / 180; const dLa = r(b[0]-a[0]), dLo = r(b[1]-a[1]);
   const h = Math.sin(dLa/2)**2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(dLo/2)**2; return 2 * R * Math.asin(Math.sqrt(h)); }
@@ -473,7 +474,7 @@ function arriveSheet(){
       <button class="btn primary arrive-ok" data-act="finishArr">🏁 Oui, finir la tournée</button>`;
   } else {
     const s = a.steps[ci]; const isKid = s.type === "kid";
-    const nom = isKid ? s.kid.prenom : (a.etab.nom || "l'établissement");
+    const nom = isKid ? s.kid.prenom : (SE(s, a).nom || "l'établissement");
     const night = a.sens === "soir";
     const q = isKid ? `Arrivé chez ${esc(nom)} ?` : `Arrivé à ${esc(nom)} ?`;
     const what = isKid ? (night ? "Enfant déposé" : "Enfant pris en charge") : (night ? "Enfants récupérés" : "Arrivé à l'établissement");
@@ -507,13 +508,14 @@ function arriveSheet(){
 }
 /* ---------- soir : liste des enfants confirmée à l'établissement ---------- */
 let pickupIdx = -1;
+function pickupKidsOf(a, i){ const e = a.steps[i]; return a.steps.filter(s => s.type === "kid" && !s.at && (!e || !Array.isArray(e.kids) || e.kids.includes(s.kid.id))); }
 function pickupSheet(i){
   const a = S.active; if (!a) return; pickupIdx = i;
-  const kids = a.steps.filter(s => s.type === "kid" && !s.at);
+  const kids = pickupKidsOf(a, i); const e = SE(a.steps[i], a);
   openSheet(`<h2>🏫 Enfants récupérés</h2>
-    <p class="small muted" style="margin-top:0">Décochez les enfants absents. Ils seront retirés de la tournée et notés absents dans l'historique.</p>
+    <p class="small muted" style="margin-top:0">${esc(e.nom || "Établissement")} — décochez les enfants absents. Ils seront retirés de la tournée et notés absents dans l'historique.</p>
     <div id="pickupList">${kids.map(s => `<label class="card pick" style="cursor:pointer;margin-bottom:8px"><input type="checkbox" class="chk" data-pick="${s.kid.id}" checked>
-      <div class="grow"><div class="name">${esc(kidName(s.kid))}</div><div class="addr">📍 ${esc(s.kid.adresse || "")}</div></div></label>`).join("")}</div>
+      <div class="grow"><div class="name">${esc(kidName(s.kid))}</div><div class="addr">📍 ${esc(s.kid.adresse || "")}</div></div></label>`).join("") || `<p class="muted">Aucun enfant à récupérer ici.</p>`}</div>
     <div id="pickupGo"></div>
     <button class="btn w100" style="margin-top:8px;padding:14px" data-act="close">Annuler</button>`);
   updatePickup();
@@ -521,21 +523,23 @@ function pickupSheet(i){
 function pickupChecked(){ return [...document.querySelectorAll("#pickupList [data-pick]")].filter(c => c.checked).map(c => c.dataset.pick); }
 function updatePickup(){
   const a = S.active; const box = document.getElementById("pickupGo"); if (!a || !box) return;
-  const ok = pickupChecked();
-  const first = a.steps.find(s => s.type === "kid" && !s.at && ok.includes(s.kid.id));
-  const nt = first ? { adr: nav(first.kid), nom: first.kid.prenom } : (S.domicile ? { adr: S.domicile, nom: "la maison" } : null);
-  const label = `✅ Valider : ${ok.length} enfant${ok.length > 1 ? "s" : ""} dans le véhicule`;
+  const ok = pickupChecked(); const mine = pickupKidsOf(a, pickupIdx).map(s => s.kid.id);
+  // prochaine étape : établissement suivant, ou premier enfant présent
+  const next = a.steps.find((s, j) => j !== pickupIdx && !s.at && !(s.type === "kid" && mine.includes(s.kid.id) && !ok.includes(s.kid.id)));
+  const nt = next ? (next.type === "kid" ? { adr: nav(next.kid), nom: next.kid.prenom } : { adr: nav(SE(next, a)), nom: SE(next, a).nom || "l'établissement suivant" }) : (S.domicile ? { adr: S.domicile, nom: "la maison" } : null);
+  const label = `✅ Valider : ${ok.length} enfant${ok.length > 1 ? "s" : ""} récupéré${ok.length > 1 ? "s" : ""}`;
   box.innerHTML = S.autoNav !== false && nt && nt.adr
     ? `<a class="btn go arrive-ok" data-act="pickupOk" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">${label}<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">puis 🧭 navigation vers ${esc(nt.nom)}</span></a>`
     : `<button class="btn go arrive-ok" data-act="pickupOk">${label}</button>`;
 }
 function confirmPickup(){
   const a = S.active; if (!a) return;
-  const ok = pickupChecked();
-  const absents = a.steps.filter(s => s.type === "kid" && !s.at && !ok.includes(s.kid.id));
-  a.steps = a.steps.filter(s => !(s.type === "kid" && !s.at && !ok.includes(s.kid.id)));
+  const ok = pickupChecked(); const e = a.steps[pickupIdx];
+  const mine = pickupKidsOf(a, pickupIdx).map(s => s.kid.id);
+  const absents = a.steps.filter(s => s.type === "kid" && mine.includes(s.kid.id) && !ok.includes(s.kid.id));
+  a.steps = a.steps.filter(s => !(s.type === "kid" && mine.includes(s.kid.id) && !ok.includes(s.kid.id)));
   a.absents = [...(a.absents||[]), ...absents.map(s => kidName(s.kid))];
-  const e = a.steps.find(s => s.type === "etab"); if (e && !e.at) e.at = new Date().toISOString();
+  if (e && e.type === "etab" && !e.at) e.at = new Date().toISOString();
   closeSheet(); save(); render(); setTimeout(scrollToCurrent, 100);
   toast(`${ok.length} enfant${ok.length > 1 ? "s" : ""} récupéré${ok.length > 1 ? "s" : ""}` + (absents.length ? ` · ${absents.length} absent${absents.length > 1 ? "s" : ""}` : ""));
   say(stepSpeech(curIndex()));
@@ -548,7 +552,7 @@ function skipSheet(i){
   let main;
   if (S.modeAuto){
     // itinéraire complet sans cet enfant, à relancer sur l'écran de la voiture
-    const rest = a.steps.filter((x, j) => j !== i && !x.at).map(x => x.type === "kid" ? nav(x.kid) : nav(a.etab));
+    const rest = a.steps.filter((x, j) => j !== i && !x.at).map(x => x.type === "kid" ? nav(x.kid) : nav(SE(x, a)));
     if (S.domicile) rest.push(S.domicile);
     const l = mapsLinks(rest)[0];
     main = l ? `<a class="btn go arrive-ok" data-act="absentGo" data-i="${i}" target="_blank" rel="noopener" href="${esc(l.url)}">⏭ Absent — passer à la suite<span class="small" style="display:block;font-weight:700;opacity:.9;margin-top:4px">et relancer l'itinéraire sur la voiture</span></a>` : "";
@@ -601,8 +605,10 @@ function startRun(){
   const kids = prepKids().filter(k => sub.present.includes(k.id));
   if (!kids.length){ toast("Cochez au moins un enfant"); return; }
   const steps = kids.map(k => ({ type:"kid", kid:JSON.parse(JSON.stringify(k)), at:null }));
-  if (sens === "matin") steps.push({ type:"etab", at:null });
-  else steps.unshift({ type:"etab", at:null });   // le soir : départ de chez soi, 1re étape = l'établissement
+  // une étape par établissement concerné, avec ses enfants (matin : après les ramassages ; soir : avant les dépôts)
+  const etabSteps = t.etabs.map(e => ({ type:"etab", etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
+  if (sens === "matin") steps.push(...etabSteps);
+  else steps.unshift(...etabSteps.reverse());
   S.active = {
     id: uid(), tourneeId:t.id, tourneeNom:t.nom, etab:{...t.etab}, sens,
     responsable: {...(t.responsable||{})}, remplace: remplActif(t) ? t.remplacement.nom : "",
@@ -613,7 +619,9 @@ function startRun(){
   sub = null; save(); render(); window.scrollTo(0,0); keepAwake();
   toast("Tournée lancée à " + hm(S.active.start));
 }
-function etabRef(a){ const h = horaire(a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
+function etabRef(a, e){ const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
+function SE(s, a){ return (s && s.etab) || a.etab; }   // établissement de l'étape (plusieurs établissements possibles)
+function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
 function curIndex(){ const a = S.active; return a ? a.steps.findIndex(s => !s.at) : -1; }
 function validateStep(i, fromVoice){
   const a = S.active; const s = a.steps[i]; if (!s) return;
@@ -633,11 +641,11 @@ function finishRun(){
   const a = S.active; if (!a) return;
   const end = new Date().toISOString();
   const entry = {
-    id: a.id, date: dayKey(a.start), tourneeId: a.tourneeId, tourneeNom: a.tourneeNom, etab: a.etab?.nom || "",
+    id: a.id, date: dayKey(a.start), tourneeId: a.tourneeId, tourneeNom: a.tourneeNom, etab: [...new Set(a.steps.filter(s => s.type === "etab").map(s => SE(s, a)?.nom).filter(Boolean))].join(", ") || a.etab?.nom || "",
     sens: a.sens, start: a.start, end, duree: Math.round(minsBetween(a.start, end)),
     nb: a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
     remplace: a.remplace || "", responsable: a.responsable?.nom || "",
-    etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (a.etab?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
+    etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (SE(s, a)?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
     dernierArret: a.steps[a.steps.length-1]?.at || null,
     retour: a.steps[a.steps.length-1]?.at ? Math.round(minsBetween(a.steps[a.steps.length-1].at, end)) : null
   };
@@ -922,7 +930,7 @@ function renderHome(){
     const nm = t.enfants.filter(k => k.matin !== false).length, ns = t.enfants.filter(k => k.soir !== false).length;
     h += `<div class="card">
       <div class="row"><div class="grow"><div class="name">${esc(t.nom)}</div>
-        <div class="addr">🏫 ${esc(t.etab.nom || "Établissement")} ${t.etab.adresse ? "· "+esc(t.etab.adresse) : "<span style='color:var(--warn)'>· adresse à renseigner</span>"}</div>
+        <div class="addr">🏫 ${t.etabs.length > 1 ? esc(t.etabs.map(e => e.nom || "Établissement").join(" · ")) : esc(t.etab.nom || "Établissement")} ${t.etabs.length > 1 ? "" : t.etab.adresse ? "· "+esc(t.etab.adresse) : "<span style='color:var(--warn)'>· adresse à renseigner</span>"}</div>
         <div class="small muted" style="margin-top:4px">${t.enfants.length} enfant${t.enfants.length>1?"s":""}${etabHoraires(t.etab) ? " · "+etabHoraires(t.etab) : ""}</div>
         ${t.responsable?.nom ? `<div class="small muted" style="margin-top:2px">👔 Responsable : ${esc(t.responsable.nom)}${t.responsable.fonction ? " ("+esc(t.responsable.fonction)+")" : ""}</div>` : ""}
         ${t.remplacement?.actif && t.remplacement.nom ? `<div class="small" style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">🔁 Remplacement de ${esc(t.remplacement.nom)}${t.remplacement.du||t.remplacement.au ? ` · ${t.remplacement.du?"du "+dFr(t.remplacement.du):""}${t.remplacement.au?" au "+dFr(t.remplacement.au):""}` : ""}${remplActif(t) ? "" : " (hors période)"}</span></div>` : ""}</div>
@@ -938,6 +946,15 @@ function renderHome(){
 }
 
 /* ---------- Préparation : cocher les présents ---------- */
+function prepEtabCards(t){
+  const list = sub.sens === "soir" ? t.etabs.slice().reverse() : t.etabs;
+  return list.map(e => { const h = horaire(e, new Date()); const ref = sub.sens === "matin" ? h.debut : h.fin;
+    const ks = prepKids().filter(k => kidEtab(t, k).id === e.id);
+    if (t.etabs.length > 1 && !ks.length) return "";
+    return `<div class="card row" style="background:${sub.sens === "soir" ? "var(--night-soft)" : "var(--brand-soft)"}"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(e.nom || "Établissement")}</b><div class="addr">${esc(e.adresse)}</div>
+      ${ref ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens === "matin" ? "🕗 Début des cours : " : "🕓 Fin de journée : "}${hTxt(ref)}</div>` : ""}
+      ${t.etabs.length > 1 ? `<div class="small muted" style="margin-top:2px">${sub.sens === "matin" ? "Déposer" : "Récupérer"} : ${ks.map(k => esc(k.prenom)).join(", ")}</div>` : ""}</div></div>`; }).join("");
+}
 function renderPrep(){
   const t = tour(sub.id); const kids = prepKids();
   const usual = eligible(t, sub.sens).map(k => k.id).join(); const changed = sub.order.join() !== usual;
@@ -947,7 +964,7 @@ function renderPrep(){
         ${changed ? `<span class="pill" style="background:#ffe7d6;color:var(--warn)">ordre modifié pour aujourd'hui</span>` : ""}</div>
       ${changed ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="prepKeep">💾 Garder cet ordre pour toujours</button><button class="btn sm" data-act="prepUsual">↺ Revenir à l'ordre habituel</button></div>` : ""}
       <p class="small muted" style="margin:8px 0 0">${sub.sens === "matin" ? "Ordre de ramassage du matin, puis l'établissement." : "Départ de chez vous, 1re étape l'établissement, puis dépôt dans l'ordre inverse du matin, puis retour. Vous pourrez confirmer la liste des enfants présents en arrivant à l'établissement."}</p></div>`;
-  if (sub.sens === "soir") h += `<div class="card row" style="background:var(--night-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(t.etab.nom||"Établissement")}</b><div class="addr">${esc(t.etab.adresse)}</div>${(sub.sens==="matin"?horaire(t.etab,new Date()).debut:horaire(t.etab,new Date()).fin) ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens==="matin"?"🕗 Début des cours : "+hTxt(horaire(t.etab,new Date()).debut):"🕓 Fin de journée : "+hTxt(horaire(t.etab,new Date()).fin)}</div>` : ""}</div></div>`;
+  if (sub.sens === "soir") h += prepEtabCards(t);
   kids.forEach((k, idx) => {
     const on = sub.present.includes(k.id);
     const com = sub.sens === "matin" ? k.comMatin : k.comSoir;
@@ -959,7 +976,7 @@ function renderPrep(){
         ${(() => { const ab = absentPrevu(k, dayKey(new Date()), sub.sens); return ab ? `<div style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absence prévue${ab.motif ? " : " + esc(ab.motif) : ""}</span></div>` : ""; })()}
         ${com ? `<div class="small muted" style="margin-top:4px">${sub.sens==="matin"?"☀️":"🌙"} ${esc(com)}</div>` : ""}</div></label>`;
   });
-  if (sub.sens === "matin") h += `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(t.etab.nom||"Établissement")}</b><div class="addr">${esc(t.etab.adresse)}</div>${(sub.sens==="matin"?horaire(t.etab,new Date()).debut:horaire(t.etab,new Date()).fin) ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens==="matin"?"🕗 Début des cours : "+hTxt(horaire(t.etab,new Date()).debut):"🕓 Fin de journée : "+hTxt(horaire(t.etab,new Date()).fin)}</div>` : ""}</div></div>`;
+  if (sub.sens === "matin") h += prepEtabCards(t);
   h += `<button class="btn go lg" data-act="startRun" ${sub.present.length?"":"disabled"}>▶ Valider les présents et démarrer la tournée</button>
     <button class="btn w100" style="margin-top:8px" data-act="back">Annuler</button>`;
   return h;
@@ -977,6 +994,11 @@ function syncActive(){
     const k = t.enfants.find(x => x.id === s.kid.id);
     if (k && JSON.stringify(k) !== JSON.stringify(s.kid)){ s.kid = JSON.parse(JSON.stringify(k)); changed = true; }
   });
+  a.steps.forEach(s => {
+    if (s.type !== "etab" || !s.etab) return;
+    const e = t.etabs.find(x => x.id === s.etab.id);
+    if (e && JSON.stringify(e) !== JSON.stringify(s.etab)){ s.etab = JSON.parse(JSON.stringify(e)); changed = true; }
+  });
   const e = { ...t.etab };
   if (JSON.stringify(e) !== JSON.stringify(a.etab)){ a.etab = e; changed = true; }
   return changed;
@@ -984,7 +1006,7 @@ function syncActive(){
 // étape qui suit l'étape i (pas encore validée) : adresse + nom, sinon la maison
 function nextTarget(i){
   const a = S.active; const j = a.steps.findIndex((s, x) => x !== i && !s.at);
-  if (j >= 0){ const s = a.steps[j]; return s.type === "kid" ? { adr: nav(s.kid), nom: s.kid.prenom } : { adr: nav(a.etab), nom: a.etab.nom || "l'établissement" }; }
+  if (j >= 0){ const s = a.steps[j]; return s.type === "kid" ? { adr: nav(s.kid), nom: s.kid.prenom } : { adr: nav(SE(s, a)), nom: SE(s, a).nom || "l'établissement" }; }
   return S.domicile ? { adr: S.domicile, nom: "la maison" } : null;
 }
 function validateBtn(i, label){
@@ -996,7 +1018,7 @@ function renderRun(){
   if (syncActive()) saveLocal();
   const a = S.active; const ci = curIndex(); const allDone = ci === -1;
   const night = a.sens === "soir";
-  const remaining = a.steps.filter(s => !s.at).map(s => s.type === "kid" ? nav(s.kid) : nav(a.etab));
+  const remaining = a.steps.filter(s => !s.at).map(s => s.type === "kid" ? nav(s.kid) : nav(SE(s, a)));
   if (S.domicile) remaining.push(S.domicile);   // l'itinéraire se termine à la maison
   const links = mapsLinks(remaining);
   let h = `<div class="timer">
@@ -1013,7 +1035,7 @@ function renderRun(){
   const movable = a.steps.map((s,i) => (s.type === "kid" && !s.at) ? i : -1).filter(i => i >= 0);
   if (!allDone){
     h += `<div class="card"><div class="row"><h3 class="grow" style="margin:0 0 4px">🗺️ Itinéraire</h3>${movable.length > 1 ? `<button class="btn sm ${runReorder?"primary":""}" data-act="runReorder">↕️ ${runReorder?"Terminer":"Changer l'ordre"}</button>` : ""}</div>
-      ${(() => { const cs = a.steps[ci]; const adr = cs ? (cs.type === "kid" ? nav(cs.kid) : nav(a.etab)) : ""; const nm = cs ? (cs.type === "kid" ? cs.kid.prenom : (a.etab.nom || "l'établissement")) : "";
+      ${(() => { const cs = a.steps[ci]; const adr = cs ? (cs.type === "kid" ? nav(cs.kid) : nav(SE(cs, a))) : ""; const nm = cs ? (cs.type === "kid" ? cs.kid.prenom : (SE(cs, a).nom || "l'établissement")) : "";
         return adr ? `<a class="btn go w100" style="margin-top:6px;padding:14px" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", adr, []))}">🧭 Naviguer vers ${esc(nm)}</a>
           <p class="small muted" style="margin:6px 0 0">Une étape à la fois : à chaque validation, la navigation part vers l'étape suivante.</p>` : `<p class="small muted">Adresse manquante pour cette étape.</p>`; })()}
     </div>`;
@@ -1023,10 +1045,10 @@ function renderRun(){
     const cls = s.at ? "done" : (i === ci ? "current" : "later");
     if (s.type === "etab"){
       h += `<div class="card step ${cls}" id="step-${i}"><div class="row"><span class="num" style="background:var(--brand);color:var(--brand-ink)">🏫</span>
-        <div class="grow"><div class="name">${esc(a.etab.nom || "Établissement")}</div><div class="addr">📍 ${esc(a.etab.adresse || "—")}</div></div>${etabRef(a) ? `<span class="pill ${night?"s":"m"}">${night?"sortie":"cours"} ${hTxt(etabRef(a))}</span>` : ""}</div>
-        ${s.at && etabRef(a) ? (()=>{ const d=new Date(s.at); const late=(d.getHours()*60+d.getMinutes()) - toMinutes(etabRef(a)); return `<div class="small" style="margin-top:6px;font-weight:800;color:${late>0?"var(--warn)":"var(--go)"}">${late>0?`⚠ Arrivé ${durTxt(late)} après ${night?"la fin":"le début"} des cours`:`✔ Arrivé ${durTxt(-late)} avant ${night?"la fin":"le début"} des cours`}</div>`; })() : ""}
+        <div class="grow"><div class="name">${esc(SE(s, a).nom || "Établissement")}</div><div class="addr">📍 ${esc(SE(s, a).adresse || "—")}</div>${Array.isArray(s.kids) && a.steps.filter(x => x.type === "etab").length > 1 ? `<div class="small" style="font-weight:700;margin-top:3px">${night ? "Récupérer" : "Déposer"} : ${esc(s.kids.map(id => (a.steps.find(x => x.type === "kid" && x.kid.id === id) || {}).kid?.prenom).filter(Boolean).join(", ") || "—")}</div>` : ""}</div>${etabRef(a, SE(s, a)) ? `<span class="pill ${night?"s":"m"}">${night?"sortie":"cours"} ${hTxt(etabRef(a, SE(s, a)))}</span>` : ""}</div>
+        ${s.at && etabRef(a, SE(s, a)) ? (()=>{ const d=new Date(s.at); const late=(d.getHours()*60+d.getMinutes()) - toMinutes(etabRef(a, SE(s, a))); return `<div class="small" style="margin-top:6px;font-weight:800;color:${late>0?"var(--warn)":"var(--go)"}">${late>0?`⚠ Arrivé ${durTxt(late)} après ${night?"la fin":"le début"} des cours`:`✔ Arrivé ${durTxt(-late)} avant ${night?"la fin":"le début"} des cours`}</div>`; })() : ""}
         ${s.at ? `<div class="row" style="margin-top:10px"><span class="doneline grow">✔ Arrivé à ${hm(s.at)}</span><button class="btn sm" data-act="validate" data-i="${i}">Annuler</button></div>`
-          : `<div class="actions row" style="margin-top:10px">${nav(a.etab) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(a.etab), []))}">🧭 Y aller</a>` : ""}${a.etab.tel ? `<a class="btn sm call" data-href="${esc(telHref(a.etab.tel))}">📞 Établissement</a>` : ""}</div>
+          : `<div class="actions row" style="margin-top:10px">${nav(SE(s, a)) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(SE(s, a)), []))}">🧭 Y aller</a>` : ""}${SE(s, a).tel ? `<a class="btn sm call" data-href="${esc(telHref(SE(s, a).tel))}">📞 Établissement</a>` : ""}</div>
              ${night ? `<button class="validate" data-act="pickupList" data-i="${i}">☐ Enfants récupérés — confirmer la liste<span class="small" style="display:block;font-weight:700;opacity:.8">cochez les enfants présents dans le véhicule</span></button>`
                      : validateBtn(i, "Arrivé à l'établissement — valider")}`}
       </div>`;
@@ -1123,19 +1145,22 @@ function renderEdit(){
       <div class="grow"><label class="f">Au (facultatif)</label><input class="t" type="date" data-tf="remplacement.au" value="${esc(t.remplacement.au)}"></div></div>
     <p class="small muted" style="margin:6px 0 0">Le nom de la personne remplacée est enregistré avec chaque tournée de l'historique.</p>` : ""}
   </div>
-  <div class="card"><h3>🏫 Établissement</h3>
-    <p class="small muted" style="margin:0">Destination le matin, point de départ le soir.</p>
-    <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etab.nom" value="${esc(t.etab.nom)}" placeholder="ex. IME Les Tilleuls">
-    <label class="f">Adresse complète</label>${addrField('data-tf="etab.adresse"', t.etab.adresse, "Rue, code postal, ville")}
-    ${gpsField('data-tf="etab.gps"', t.etab.gps)}
+  ${t.etabs.map((e, ei) => `<div class="card"><div class="row"><h3 class="grow" style="margin:0">🏫 Établissement${t.etabs.length > 1 ? " " + (ei+1) : ""}</h3>
+      ${t.etabs.length > 1 ? `<div class="ord" style="flex-direction:row"><button data-act="eUp" data-i="${ei}" ${ei===0?"disabled":""}>▲</button><button data-act="eDown" data-i="${ei}" ${ei===t.etabs.length-1?"disabled":""}>▼</button></div><button class="btn sm danger" data-act="delEtab" data-i="${ei}">✖</button>` : ""}</div>
+    <p class="small muted" style="margin:4px 0 0">${t.etabs.length > 1 ? "Le matin, les établissements sont faits dans cet ordre après les ramassages ; le soir, dans l'ordre inverse avant les dépôts." : "Destination le matin, point de départ le soir."}</p>
+    <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etabs.${ei}.nom" value="${esc(e.nom)}" placeholder="ex. IME Les Tilleuls">
+    <label class="f">Adresse complète</label>${addrField(`data-tf="etabs.${ei}.adresse"`, e.adresse, "Rue, code postal, ville")}
+    ${gpsField(`data-tf="etabs.${ei}.gps"`, e.gps)}
     <label class="f">🕗 Horaires des cours (laisser vide les jours sans cours)</label>
     <table style="width:100%;border-collapse:collapse"><tr class="small muted"><td></td><td style="font-weight:800">Début</td><td style="font-weight:800">Fin</td></tr>
-    ${[1,2,3,4,5,6].map(d => { const h = (t.etab.horaires||{})[d] || {}; return `<tr><td style="font-weight:800;text-transform:capitalize;padding-right:6px">${JOURS_LONG[d].slice(0,3)}.</td>
-      <td style="padding:3px 4px 3px 0"><input class="t" type="time" data-hor="${d}.debut" value="${esc(h.debut||"")}" style="padding:7px"></td>
-      <td style="padding:3px 0"><input class="t" type="time" data-hor="${d}.fin" value="${esc(h.fin||"")}" style="padding:7px"></td></tr>`; }).join("")}</table>
-    <button class="btn sm" style="margin-top:6px" data-act="copyMon">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>
-    <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etab.tel" value="${esc(t.etab.tel)}">
-  </div>
+    ${[1,2,3,4,5,6].map(d => { const h = (e.horaires||{})[d] || {}; return `<tr><td style="font-weight:800;text-transform:capitalize;padding-right:6px">${JOURS_LONG[d].slice(0,3)}.</td>
+      <td style="padding:3px 4px 3px 0"><input class="t" type="time" data-hor="${ei}.${d}.debut" value="${esc(h.debut||"")}" style="padding:7px"></td>
+      <td style="padding:3px 0"><input class="t" type="time" data-hor="${ei}.${d}.fin" value="${esc(h.fin||"")}" style="padding:7px"></td></tr>`; }).join("")}</table>
+    <button class="btn sm" style="margin-top:6px" data-act="copyMon" data-i="${ei}">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>
+    <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
+    ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
+  </div>`).join("")}
+  <button class="btn w100" style="margin-bottom:12px" data-act="addEtab">🏫 ＋ Ajouter un autre établissement</button>
   <div class="card"><div class="row"><h3 class="grow" style="margin:0">👧 Enfants – ordre du matin</h3><button class="btn sm brand" data-act="addKid">➕ Ajouter</button></div>
     <p class="small muted">Le soir, la tournée suit automatiquement l'ordre inverse.</p>
     ${t.enfants.length > 1 ? `<button class="btn sm" data-act="sortTime">🕗 Trier par heure de ramassage</button>` : ""}
@@ -1146,6 +1171,7 @@ function renderEdit(){
       <div class="ord"><button data-act="kUp" data-i="${i}" ${i===0?"disabled":""}>▲</button><button data-act="kDown" data-i="${i}" ${i===t.enfants.length-1?"disabled":""}>▼</button></div>
       <div class="grow"><div class="row"><span class="num">${i+1}</span><span class="name grow">${esc(kidName(k))}</span>${k.heureMatin?`<span class="pill m">${k.heureMatin.replace(":","h")}</span>`:""}</div>
         <div class="addr">📍 ${esc(k.adresse || "—")}</div>
+        ${t.etabs.length > 1 ? `<div class="addr">🏫 ${esc(kidEtab(t, k).nom || "Établissement")}</div>` : ""}
         <div class="row" style="margin-top:6px">${k.matin!==false?'<span class="pill m">☀️ matin</span>':""}${k.soir!==false?'<span class="pill s">🌙 soir</span>':""}
           <span class="small muted">${(k.contacts||[]).filter(c=>c.tel).length} contact(s)</span></div>
         ${(() => { const td = dayKey(new Date()); const nx = (k.absences||[]).filter(x => (x.au || x.du) >= td).sort((a,b) => a.du < b.du ? -1 : 1)[0]; return nx ? `<div style="margin-top:6px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absent ${esc(absTxt(nx))}</span></div>` : ""; })()}</div>
@@ -1458,7 +1484,7 @@ function renderReglages(){
 /* ---------- saisie d'adresse : suggestions + vérification ---------- */
 function knownAddresses(){
   const set = new Map();
-  S.tournees.forEach(t => { if (t.etab.adresse) set.set(t.etab.adresse.toLowerCase(), t.etab.adresse); t.enfants.forEach(k => { if (k.adresse) set.set(k.adresse.toLowerCase(), k.adresse); }); });
+  S.tournees.forEach(t => { (t.etabs || [t.etab]).forEach(e => { if (e.adresse) set.set(e.adresse.toLowerCase(), e.adresse); }); t.enfants.forEach(k => { if (k.adresse) set.set(k.adresse.toLowerCase(), k.adresse); }); });
   return [...set.values()].sort((a,b) => a.localeCompare(b, "fr"));
 }
 function refreshAddrList(){
@@ -1528,6 +1554,7 @@ function drawKidForm(){
   openSheet(`<h2>${editKidIndex >= 0 ? "Modifier l'enfant" : "Nouvel enfant"}</h2>
     <div class="row"><div class="grow"><label class="f">Prénom *</label><input class="t" id="k_prenom" value="${esc(e.prenom)}" autocomplete="off"></div>
       <div class="grow"><label class="f">Nom</label><input class="t" id="k_nom" value="${esc(e.nom)}" autocomplete="off"></div></div>
+    ${(() => { const t = tour(sub.id); return t.etabs.length > 1 ? `<label class="f">🏫 Établissement</label><select class="t" id="k_etab">${t.etabs.map(x => `<option value="${x.id}" ${x.id === (e.etabId || t.etabs[0].id) ? "selected" : ""}>${esc(x.nom || "Établissement sans nom")}</option>`).join("")}</select>` : ""; })()}
     <label class="f">Adresse complète (rue, code postal, ville)</label>${addrField('id="k_adresse"', e.adresse, "12 rue des Lilas, 69003 Lyon")}
     ${gpsField('id="k_gps"', e.gps)}
     <div class="row"><div class="grow"><label class="f">Heure de ramassage le matin</label><input class="t" type="time" id="k_heure" value="${esc(e.heureMatin)}"></div>
@@ -1554,7 +1581,8 @@ function drawKidForm(){
 function readKidForm(){
   const g = id => document.getElementById(id)?.value.trim() ?? "";
   const e = editKid;
-  e.prenom = g("k_prenom"); e.nom = g("k_nom"); e.adresse = g("k_adresse"); e.gps = g("k_gps"); e.heureMatin = g("k_heure");
+  e.prenom = g("k_prenom"); e.nom = g("k_nom"); e.adresse = g("k_adresse"); e.gps = g("k_gps");
+  if (document.getElementById("k_etab")) e.etabId = document.getElementById("k_etab").value; e.heureMatin = g("k_heure");
   e.comMatin = g("k_comMatin"); e.comSoir = g("k_comSoir"); e.note = g("k_note");
   e.matin = document.getElementById("k_matin").checked; e.soir = document.getElementById("k_soir").checked;
   e.contacts = [...document.querySelectorAll("#contacts [data-ci]")].map(r => ({
@@ -1616,7 +1644,7 @@ function say(text){
 function stepSpeech(i){
   const a = S.active; const s = a?.steps[i];
   if (!s) return S.domicile ? "Toutes les étapes sont faites. Retour à la maison." : "Toutes les étapes sont faites.";
-  if (s.type === "etab") return `Prochaine étape : ${a.etab.nom || "l'établissement"}, ${a.etab.adresse || ""}.`;
+  if (s.type === "etab") return `Prochaine étape : ${SE(s, a).nom || "l'établissement"}, ${SE(s, a).adresse || ""}.`;
   const k = s.kid; const com = a.sens === "soir" ? k.comSoir : k.comMatin;
   return `Prochaine étape : ${k.prenom}, ${k.adresse || "adresse non renseignée"}.${com ? " Consigne : " + com : ""}`;
 }
@@ -1659,7 +1687,7 @@ function undoLast(){
   let best = -1; a.steps.forEach((s, i) => { if (s.at && (best < 0 || s.at >= a.steps[best].at)) best = i; });
   if (best < 0) return null;
   a.steps[best].at = null; save(); render();
-  return a.steps[best].type === "kid" ? a.steps[best].kid.prenom : (a.etab.nom || "l'établissement");
+  return a.steps[best].type === "kid" ? a.steps[best].kid.prenom : (SE(a.steps[best], a).nom || "l'établissement");
 }
 
 /* ---------- interprétation des commandes ---------- */
@@ -1712,16 +1740,16 @@ function voiceCommand(text){
   }
   if (has(/navig|gps|itineraire|y aller|guide|route/) && !isCall && !isMsg){
     if (ci < 0){ if (S.domicile) offer(mapsDirUrl("", S.domicile, []), "🧭 Naviguer vers la maison", "go", true); return; }
-    const s = a.steps[ci]; const adr = s.type === "kid" ? nav(s.kid) : nav(a.etab);
+    const s = a.steps[ci]; const adr = s.type === "kid" ? nav(s.kid) : nav(SE(s, a));
     if (!adr) return done("Adresse manquante pour cette étape");
-    offer(mapsDirUrl("", adr, []), `🧭 Naviguer vers ${esc(s.type === "kid" ? s.kid.prenom : (a.etab.nom || "l'établissement"))}`, "go", true); return;
+    offer(mapsDirUrl("", adr, []), `🧭 Naviguer vers ${esc(s.type === "kid" ? s.kid.prenom : (SE(s, a).nom || "l'établissement"))}`, "go", true); return;
   }
   if (has(/prochain|suivante ?\?|c est qui|qui (est|c est) le|adresse/) && !isCall && !isMsg && !has(/valid/)){
     const msg = stepSpeech(ci); return done(msg.replace("Prochaine étape : ", "➡ "), msg);
   }
   if (!isCall && !isMsg && has(/valid|suivant|c est bon|\bok\b|d accord|pris en charge|depose|recupere|monte|arrive a|c est fait/)){
     if (ci < 0) return done("Toutes les étapes sont déjà validées", "Toutes les étapes sont validées. Dites : je suis rentré, pour finir la tournée.");
-    const s = a.steps[ci]; const nm = s.type === "kid" ? s.kid.prenom : (a.etab.nom || "Établissement");
+    const s = a.steps[ci]; const nm = s.type === "kid" ? s.kid.prenom : (SE(s, a).nom || "Établissement");
     const nt = S.autoNav !== false && !S.modeAuto ? nextTarget(ci) : null;
     validateStep(ci, true);
     done(`✔ ${nm} validé(e)`, `${nm}, validé. ${stepSpeech(curIndex())}`);
@@ -1867,7 +1895,7 @@ document.addEventListener("click", e => {
   switch (a){
     case "close": closeSheet(); break;
     case "back": sub = null; render(); window.scrollTo(0,0); break;
-    case "newTour": { const t = { id:uid(), nom:"Tournée " + (S.tournees.length+1), etab:{nom:"",adresse:"",tel:"",horaires:{}}, responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
+    case "newTour": { const t = { id:uid(), nom:"Tournée " + (S.tournees.length+1), etabs:[{id:uid(),nom:"",adresse:"",tel:"",horaires:{}}], responsable:{nom:"",fonction:"",tel:"",email:""}, remplacement:{actif:false,nom:"",tel:"",du:"",au:""}, enfants:[] }; linkEtabs(t); S.tournees.push(t); save(); sub = {type:"edit", id:t.id}; render(); break; }
     case "saveTour": { const t = tour(sub.id);
       if (!t.nom.trim()){ toast("Donnez un nom à la tournée"); break; }
       if (!t.etab.adresse) toast("Tournée enregistrée ✓ (pensez à l'adresse de l'établissement)"); else toast("Tournée enregistrée ✓");
@@ -1915,7 +1943,7 @@ document.addEventListener("click", e => {
     case "msgs": msgsSheet(i); break;
     case "finish": finishRun(); break;
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
-    case "copyMon": { const e2 = tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
+    case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
       setNext({ tourneeId:tid, sens, date:dk, heure: defaultHeure(tour(tid), sens, dk) }); break; }
     case "planNo": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const t = tour(tid);
@@ -1934,6 +1962,10 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "addEtab": { const t = tour(sub.id); t.etabs.push({ id: uid(), nom:"", adresse:"", tel:"", gps:"", horaires:{} }); linkEtabs(t); save(); render(); toast("Établissement ajouté"); break; }
+    case "delEtab": { const t = tour(sub.id); if (t.etabs.length < 2) break; pendingEtab = i; confirmSheet(`Retirer ${esc(t.etabs[i].nom || "cet établissement")} ?`, "Les enfants qui y allaient seront rattachés au premier établissement.", "delEtabOk", "Oui, retirer"); break; }
+    case "delEtabOk": { const t = tour(sub.id); t.etabs.splice(pendingEtab, 1); linkEtabs(t); save(); closeSheet(); render(); break; }
+    case "eUp": case "eDown": { const t = tour(sub.id); const j = a === "eUp" ? i-1 : i+1; if (j >= 0 && j < t.etabs.length){ [t.etabs[i], t.etabs[j]] = [t.etabs[j], t.etabs[i]]; linkEtabs(t); save(); render(); } break; }
     case "arrMsg": arrMsgKey = id; arriveSheet(); break;
     case "vcfKid": { const k = S.tournees.flatMap(t => t.enfants).find(x => x.id === id); saveVcf(contactRows().filter(r => r.kidId === id), `contacts-${(k?.prenom || "enfant").replace(/[^\wÀ-ÿ-]/g, "")}.vcf`); break; }
     case "vcfAll": saveVcf(contactRows(), "contacts-transport-scolaire.vcf"); break;
@@ -1981,7 +2013,7 @@ document.addEventListener("click", e => {
       break;
   }
 });
-let pendingDel = null, pendingAbsent = null;
+let pendingDel = null, pendingAbsent = null, pendingEtab = null;
 
 document.addEventListener("change", e => {
   const t = e.target;
@@ -2005,13 +2037,14 @@ document.addEventListener("change", e => {
   if (t.dataset.pick){ t.closest(".pick").classList.toggle("off", !t.checked); updatePickup(); return; }
   if (t.id === "pf_t" || t.id === "pf_d" || t.id === "pf_s"){ updatePlanInfo(true); return; }
   if (t.dataset.hor){
-    const [d, k] = t.dataset.hor.split("."); const e2 = tour(sub.id).etab;
+    const [ei, d, k] = t.dataset.hor.split("."); const e2 = tour(sub.id).etabs[Number(ei)];
     e2.horaires[d] = Object.assign({debut:"",fin:""}, e2.horaires[d]||{}); e2.horaires[d][k] = t.value; save(); return;
   }
   if (t.dataset.tf){
     const tr = tour(sub.id); const path = t.dataset.tf.split(".");
     const val = t.type === "checkbox" ? t.checked : t.value.trim();
-    if (path.length === 2){ tr[path[0]] = tr[path[0]] || {}; tr[path[0]][path[1]] = val; } else tr[path[0]] = val;
+    let o = tr; for (let x = 0; x < path.length - 1; x++){ const key = /^\d+$/.test(path[x]) ? Number(path[x]) : path[x]; o[key] = o[key] || {}; o = o[key]; }
+    o[path[path.length-1]] = val;
     save(); if (t.type === "checkbox") render(); return;
   }
   if (t.dataset.setb){ S[t.dataset.setb] = t.checked; save(); toast(t.checked ? "Activé" : "Désactivé"); return; }
