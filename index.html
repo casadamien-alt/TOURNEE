@@ -410,6 +410,59 @@ document.addEventListener("click", e => {
   const l = e.target.closest && e.target.closest('a[href*="google.com/maps"]');
   if (l && S.active) navPending = true;
 }, true);
+/* ---------- détection d'arrivée par GPS (version GitHub uniquement) ---------- */
+const GEO_KEY = "tournee-geo-cache", ARRIVE_M = 80;
+let geoCache = {}; try { geoCache = JSON.parse(localStorage.getItem(GEO_KEY) || "{}"); } catch(e){}
+let geoWatch = null, arrivedFor = null, geoBusy = false;
+function coordsOf(q){ const m = String(q||"").match(/^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/); return m ? [+m[1], +m[2]] : null; }
+async function geocode(q){
+  if (!q) return null;
+  const c = coordsOf(q); if (c) return c;
+  if (geoCache[q]) return geoCache[q];
+  try {
+    const r = await fetch("https://api-adresse.data.gouv.fr/search/?limit=1&q=" + encodeURIComponent(q));
+    const j = await r.json(); const f = j.features && j.features[0];
+    if (f && f.properties.score > 0.45){ const p = [f.geometry.coordinates[1], f.geometry.coordinates[0]]; geoCache[q] = p; try { localStorage.setItem(GEO_KEY, JSON.stringify(geoCache)); } catch(e){} return p; }
+  } catch(e){}
+  return null;
+}
+async function targetOf(ci){
+  const a = S.active; if (!a) return null;
+  if (ci < 0) return S.domicile ? { key: a.id + ":home", nom: "la maison", c: await geocode(S.domicile) } : null;
+  const s = a.steps[ci]; const o = s.type === "kid" ? s.kid : a.etab;
+  const c = coordsOf(o.gps) || await geocode(o.adresse) || await geocode(o.gps);
+  return { key: a.id + ":" + (s.type === "kid" ? s.kid.id : "etab"), nom: s.type === "kid" ? s.kid.prenom : (a.etab.nom || "l'établissement"), c };
+}
+function distM(a, b){ const R = 6371000, r = x => x * Math.PI / 180; const dLa = r(b[0]-a[0]), dLo = r(b[1]-a[1]);
+  const h = Math.sin(dLa/2)**2 + Math.cos(r(a[0])) * Math.cos(r(b[0])) * Math.sin(dLo/2)**2; return 2 * R * Math.asin(Math.sqrt(h)); }
+function fmtDist(m){ return m < 1000 ? `${Math.round(m/10)*10} m` : `${(m/1000).toFixed(1).replace(".", ",")} km`; }
+function beep(){ try { const ac = new (window.AudioContext || window.webkitAudioContext)(); [0, .25].forEach(t => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = 880; g.gain.value = .25; o.connect(g); g.connect(ac.destination); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + .15); }); } catch(e){} }
+async function onPos(p){
+  if (geoBusy) return; geoBusy = true;
+  try {
+    const a = S.active; if (!a) return;
+    const ci = curIndex(); const t = await targetOf(ci);
+    const el = document.getElementById("geoDist");
+    if (!t || !t.c){ if (el) el.textContent = t ? `adresse de ${t.nom} introuvable sur la carte` : ""; return; }
+    const d = distM([p.coords.latitude, p.coords.longitude], t.c);
+    if (el) el.textContent = `${t.nom} à ${fmtDist(d)}`;
+    if (d <= ARRIVE_M && arrivedFor !== t.key && !document.querySelector(".sheet")){
+      arrivedFor = t.key;
+      try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch(e){}
+      beep(); arriveSheet();
+      say(ci < 0 ? "Vous êtes arrivé à la maison." : `Vous êtes arrivé : ${t.nom}.`);
+    }
+  } finally { geoBusy = false; }
+}
+function geoUpdate(){
+  const want = STANDALONE && !!S.active && S.gpsArrivee !== false && !document.hidden && view === "tournees" && !!navigator.geolocation;
+  if (want && geoWatch === null){
+    geoWatch = navigator.geolocation.watchPosition(onPos, err => { const el = document.getElementById("geoDist"); if (el) el.textContent = err.code === 1 ? "position refusée (autorisez la localisation pour ce site)" : "position indisponible"; },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
+  } else if (!want && geoWatch !== null){ navigator.geolocation.clearWatch(geoWatch); geoWatch = null; }
+}
+document.addEventListener("visibilitychange", () => geoUpdate());
+
 function arriveSheet(){
   const a = S.active; if (!a) return;
   const ci = curIndex();
@@ -796,6 +849,7 @@ function render(){
   if (view === "reglages") m.innerHTML = renderReglages();
   renderVoice();
   renderHelp();
+  if (typeof geoUpdate === "function") geoUpdate();
   refreshAddrList();
 }
 function helpPeople(){
@@ -933,6 +987,7 @@ function renderRun(){
     <div><span class="small muted">Départ</span><b>${hm(a.start)}</b></div>
     <div><span class="small muted">Durée</span><b id="elapsed">${durTxt(minsBetween(a.start, new Date()))}</b></div>
     <div><span class="small muted">Étapes</span><b>${a.steps.filter(s=>s.at).length}/${a.steps.length}</b></div></div>`;
+  if (STANDALONE && S.gpsArrivee !== false) h += `<div class="card small" style="padding:8px 14px;font-weight:800;color:var(--go)">📍 <span id="geoDist">recherche de votre position…</span></div>`;
   if (a.remplace || a.responsable?.nom){
     h += `<div class="card row" style="padding:10px 14px">
       <div class="grow small">${a.remplace ? `<div style="font-weight:800">🔁 Remplacement de ${esc(a.remplace)}</div>` : ""}
@@ -1347,6 +1402,7 @@ function renderHist(){
 /* ---------- Réglages ---------- */
 function renderReglages(){
   return `<div class="card"><h3>👤 Vous</h3><label class="f">Votre prénom (signature des messages)</label><input class="t" data-set="chauffeur" value="${esc(S.chauffeur)}" placeholder="ex. Damien">
+    ${STANDALONE ? `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="gpsArrivee" ${S.gpsArrivee === false ? "" : "checked"} style="width:22px;height:22px"> 📍 Détecter mon arrivée à chaque étape (GPS) : vibration + « Arrivé ? Valider »</label>` : ""}
     <label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="autoNav" ${S.autoNav === false ? "" : "checked"} style="width:22px;height:22px"> 🧭 Lancer la navigation vers l'étape suivante à chaque validation</label>
     <label class="f">🏠 Mon domicile : fin de chaque tournée (matin et soir)</label>${addrField('data-set="domicile"', S.domicile || "", "Votre adresse, code postal, ville")}</div>
   <div class="card"><h3>💬 Modèles de messages</h3>
