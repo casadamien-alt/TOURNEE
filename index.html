@@ -1262,12 +1262,16 @@ function renderEdit(){
     <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etabs.${ei}.nom" value="${esc(e.nom)}" placeholder="ex. IME Les Tilleuls">
     <label class="f">Adresse complète</label>${addrField(`data-tf="etabs.${ei}.adresse"`, e.adresse, "Rue, code postal, ville")}
     ${gpsField(`data-tf="etabs.${ei}.gps"`, e.gps)}
+    ${t.dateUnique ? (() => { const wd = new Date(t.dateUnique + "T12:00:00").getDay(); const h = (e.horaires||{})[wd] || {};
+      return `<label class="f">🕗 Horaires ce jour-là (facultatif)</label>
+      <div class="row"><div class="grow"><span class="small muted">Début</span><input class="t" type="time" data-hor="${ei}.${wd}.debut" value="${esc(h.debut||"")}" style="padding:7px"></div>
+        <div class="grow"><span class="small muted">Fin</span><input class="t" type="time" data-hor="${ei}.${wd}.fin" value="${esc(h.fin||"")}" style="padding:7px"></div></div>`; })() : `
     <label class="f">🕗 Horaires des cours (laisser vide les jours sans cours)</label>
     <table style="width:100%;border-collapse:collapse"><tr class="small muted"><td></td><td style="font-weight:800">Début</td><td style="font-weight:800">Fin</td></tr>
     ${[1,2,3,4,5,6].map(d => { const h = (e.horaires||{})[d] || {}; return `<tr><td style="font-weight:800;text-transform:capitalize;padding-right:6px">${JOURS_LONG[d].slice(0,3)}.</td>
       <td style="padding:3px 4px 3px 0"><input class="t" type="time" data-hor="${ei}.${d}.debut" value="${esc(h.debut||"")}" style="padding:7px"></td>
       <td style="padding:3px 0"><input class="t" type="time" data-hor="${ei}.${d}.fin" value="${esc(h.fin||"")}" style="padding:7px"></td></tr>`; }).join("")}</table>
-    <button class="btn sm" style="margin-top:6px" data-act="copyMon" data-i="${ei}">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>
+    <button class="btn sm" style="margin-top:6px" data-act="copyMon" data-i="${ei}">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>`}
     <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
     ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
   </div>`).join("")}
