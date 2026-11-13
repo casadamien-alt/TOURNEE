@@ -116,6 +116,8 @@ table.steps{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
 table.steps td{padding:5px 2px;border-top:1px solid var(--line)}
 table.steps td:last-child{text-align:right;font-weight:800}
 .ocr{background:#fff3bf !important;border-color:#e0b100 !important}
+.vide{background:#fdecec !important;border:2px dashed #d64545 !important}
+.vide::placeholder{color:#c03030;font-weight:800;opacity:1}
 .bar{height:7px;background:#ece7da;border-radius:4px;overflow:hidden;margin:5px 0}
 .bar i{display:block;height:100%;background:#f2b705;transition:width .3s}
 label.btn{cursor:pointer;text-align:center}
@@ -1740,17 +1742,26 @@ async function runOcr(){
       el.value = v; el.dataset.auto = "1"; el.classList.add("ocr"); lus.push(k);
     });
     if (r.immat){ const vh = (S.vehicules || []).find(x => x.immat === r.immat); const el = document.getElementById("pl_veh"); if (vh && el && (!el.value || el.dataset.auto)){ el.value = vh.nom; el.classList.add("ocr"); } }
-    pl.lus = lus; pl.ocrState = lus.length ? "ok" : "rien"; plStatus();
-  } catch(e){ if (pl && pl.id === id){ pl.ocrState = "erreur"; plStatus(); } }
+    pl.lus = lus; pl.ocrState = lus.length ? "ok" : "rien"; markVides(); plStatus();
+  } catch(e){ if (pl && pl.id === id){ pl.ocrState = "erreur"; markVides(); plStatus(); } }
 }
+const VIDE_IDS = { pl_date:"date", pl_heure:"heure", pl_station:"station", pl_carb:"carburant", pl_litres:"litres", pl_prix:"prix au litre", pl_montant:"montant", pl_km:"kilométrage", pl_veh:"véhicule", pl_immat:"immatriculation" };
+function markVides(){
+  pl.vides = [];
+  Object.entries(VIDE_IDS).forEach(([elId, lib]) => {
+    const el = document.getElementById(elId); if (!el) return;
+    if (!el.value){ el.classList.add("vide"); if (el.placeholder !== undefined && el.tagName === "INPUT") el.placeholder = "⚠ non lu — à remplir"; pl.vides.push(lib); }
+  });
+}
+function unVide(el){ if (el && el.value) el.classList.remove("vide"); }
 const LUS_LIB = { date:"date", heure:"heure", station:"station", carburant:"carburant", litres:"litres", prixL:"prix au litre", montant:"montant", km:"kilométrage", immat:"immatriculation" };
 function plStatus(){
   const el = document.getElementById("pl_status"); if (!el || !pl) return;
   const s = pl.ocrState;
   el.innerHTML = s === "lecture" ? `🔎 Lecture du reçu… <b>${Math.round((pl.pct || 0) * 100)} %</b><div class="bar"><i style="width:${Math.round((pl.pct || 0) * 100)}%"></i></div><span class="small muted">La 1re fois, l'outil de lecture se télécharge (quelques secondes). Vous pouvez remplir en même temps.</span>`
-    : s === "ok" ? `✓ Lu sur le reçu : <b>${pl.lus.map(k => LUS_LIB[k]).join(", ")}</b>.<br><span class="small">Vérifiez les cases <span class="ocr" style="padding:0 4px;border-radius:4px">surlignées</span> et complétez le reste.</span>${pl.lus.includes("km") ? "" : `<br><span class="small muted">Kilométrage non trouvé : tapez-le à la main.</span>`}`
-    : s === "rien" ? `⚠️ Je n'ai pas réussi à lire les montants sur cette photo. Remplissez à la main, ou reprenez la photo bien à plat, de près et avec de la lumière.`
-    : s === "erreur" ? `⚠️ Lecture automatique impossible (pas de connexion ?). Remplissez à la main : la photo est quand même gardée.`
+    : s === "ok" ? `✓ Lu sur le reçu : <b>${pl.lus.map(k => LUS_LIB[k]).join(", ")}</b>.<br><span class="small">Vérifiez les cases <span class="ocr" style="padding:0 4px;border-radius:4px">surlignées</span> et complétez le reste.</span>${pl.vides?.length ? `<br><span class="small" style="color:#c03030;font-weight:800">⚠ Non lu, laissé vide : ${pl.vides.join(", ")}.</span>` : ""}`
+    : s === "rien" ? `⚠️ Je n'ai pas réussi à lire les montants sur cette photo. Les cases <b style="color:#c03030">en rouge</b> sont à remplir à la main, ou reprenez la photo bien à plat, de près et avec de la lumière.`
+    : s === "erreur" ? `⚠️ Lecture automatique impossible (pas de connexion ?). Les cases <b style="color:#c03030">en rouge</b> sont à remplir à la main : la photo est quand même gardée.`
     : "";
 }
 
@@ -1796,8 +1807,8 @@ function plSheet(p){
     ${!pl.url && p.photo ? `<p class="small muted">🧾 Reçu enregistré${p.photoDrive ? ` dans votre Drive — <a href="${esc(p.photoDrive.url)}" target="_blank" rel="noopener">l'ouvrir</a>` : ""}.</p>` : ""}
     <div id="pl_status" class="small" style="margin:8px 0"></div>
     ${(pl.blob || p.photo) && !pl.ocrState ? `<button class="btn sm" id="pl_ocrbtn" data-act="plOcr">🔎 Lire le reçu</button>` : ""}
-    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pl_date" value="${esc(p.date || dayKey(new Date()))}"${auto}></div>
-      <div class="grow"><label class="f">Heure</label><input class="t" type="time" id="pl_heure" value="${esc(p.heure || hmInput(new Date()))}"${auto}></div></div>
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pl_date" value="${esc(p.date || (pl.vierge ? "" : dayKey(new Date())))}"${auto}></div>
+      <div class="grow"><label class="f">Heure</label><input class="t" type="time" id="pl_heure" value="${esc(p.heure || (pl.vierge ? "" : hmInput(new Date())))}"${auto}></div></div>
     <label class="f">Station</label><input class="t" id="pl_station" list="plStations" value="${esc(p.station || "")}" placeholder="ex. TotalEnergies Riom">
     <datalist id="plStations">${known.map(s => `<option value="${esc(s)}">`).join("")}</datalist>
     <label class="f">Carburant</label><select class="t" id="pl_carb"><option value=""></option>${CARBURANTS.map(c => `<option ${c === p.carburant ? "selected" : ""}>${c}</option>`).join("")}</select>
@@ -1824,8 +1835,8 @@ function newPlein(extra){
 async function plFromFile(file){
   if (!file) return;
   const blob = await shrinkPhoto(file);
-  const p = newPlein({ photo: true });
-  pl = { id: p.id, isNew: true, blob, url: URL.createObjectURL(blob), draft: p };
+  const p = newPlein({ photo: true, carburant: "", vehicule: "", immat: "" });
+  pl = { id: p.id, isNew: true, vierge: true, blob, url: URL.createObjectURL(blob), draft: p };
   plSheet(p); runOcr();
 }
 async function plOpen(id){
@@ -2095,7 +2106,7 @@ function addrField(attr, value, ph){
 document.addEventListener("toggle", e => { if (e.target.id === "pausedBox") pausedOpen = e.target.open; }, true);
 document.addEventListener("input", e => {
   if (e.target.id === "famSearch"){ famQ = e.target.value; const pos = e.target.selectionStart; render(); const el = document.getElementById("famSearch"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(x){} } return; }
-  if (e.target.id && e.target.id.startsWith("pl_")){ const x = e.target; delete x.dataset.auto; delete x.dataset.calc; x.classList.remove("ocr"); return; }
+  if (e.target.id && e.target.id.startsWith("pl_")){ const x = e.target; delete x.dataset.auto; delete x.dataset.calc; x.classList.remove("ocr"); unVide(x); return; }
   const t = e.target; if (!t.dataset || !t.dataset.addr) return;
   const box = t.closest(".addrbox"); if (!box) return;
   box.querySelector("[data-addrcheck]").href = mapsSearch(t.value);
@@ -2706,8 +2717,9 @@ document.addEventListener("change", e => {
   if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
   if (t.id === "carbuMonth"){ carbuMonth = t.value; render(); return; }
   if (t.id === "crep_month"){ crep.month = t.value; carbuReportSheet(); return; }
-  if (t.id === "pl_litres" || t.id === "pl_prix" || t.id === "pl_montant"){ plAutoCalc(t.id); return; }
-  if (t.id === "pl_veh"){ const vh = (S.vehicules || []).find(v => v.nom === t.value); const im = document.getElementById("pl_immat"); if (vh && vh.immat && im) im.value = vh.immat; return; }
+  if (t.id === "pl_litres" || t.id === "pl_prix" || t.id === "pl_montant"){ plAutoCalc(t.id); ["pl_litres","pl_prix","pl_montant"].forEach(i => unVide(document.getElementById(i))); return; }
+  if (t.id && t.id.startsWith("pl_")) unVide(t);
+  if (t.id === "pl_veh"){ const vh = (S.vehicules || []).find(v => v.nom === t.value); const im = document.getElementById("pl_immat"); if (vh && vh.immat && im){ im.value = vh.immat; unVide(im); } return; }
   if (t.id === "histMonth"){ histMonth = t.value; openHist = null; render(); return; }
   if (t.id === "rep_month"){ rep.month = t.value; reportSheet(); return; }
   if (t.id === "rep_week"){ if (t.value) rep.week = t.value; reportSheet(); return; }
