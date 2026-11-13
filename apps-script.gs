@@ -18,6 +18,15 @@ function doPost(e) {
   let req;
   try { req = JSON.parse(e.postData.contents); } catch (x) { return repondre_({ ok: false, erreur: "format" }); }
   if ((req.code || "") !== CODE_SECRET) return repondre_({ ok: false, erreur: "code" });
+  // création d'un événement dans votre Google Agenda (avec alerte)
+  if (req.agenda) {
+    const a = req.agenda;
+    const ev = CalendarApp.getDefaultCalendar().createEvent(a.titre || "Tournée", new Date(a.debut), new Date(a.fin),
+      { location: a.lieu || "", description: a.description || "" });
+    ev.removeAllReminders();
+    (a.rappels || [60]).forEach(function (m) { ev.addPopupReminder(m); });
+    return repondre_({ ok: true, agenda: "cree" });
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {

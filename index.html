@@ -821,7 +821,7 @@ function eventData(n){
     startTime: iso(st), endTime: iso(st + dur),
     location: n.sens === "matin" ? (kids[0]?.adresse || t?.etab.adresse || "") : (t?.etab.adresse || ""),
     description: `Tournée du ${n.sens} – ${t?.etab.nom || ""}\nEnfants : ${kids.map(k => k.prenom).join(", ")}`,
-    overrideReminders: [{ method:"popup", minutes:60 }, { method:"popup", minutes:30 }]
+    overrideReminders: [{ method:"popup", minutes:60 }]
   };
 }
 let mcpNs = null, calBusy = false;
@@ -845,7 +845,36 @@ async function createCalEvent(){
     else say("Pas de réponse claire de Google Agenda : l'événement a peut-être été créé. Vérifiez votre agenda avant de réessayer.");
   }
 }
+async function agendaViaScript(n){
+  if (typeof ENDPOINT === "undefined" || typeof code !== "function" || !code()) return { ok:false, why:"nosync" };
+  try {
+    const ev = eventData(n); const st = new Date(n.date + "T" + n.heure + ":00"); const dur = estDuree(n);
+    const r = await fetch(ENDPOINT, { method:"POST", body: JSON.stringify({ code: code(), agenda: { titre: ev.summary, debut: st.getTime(), fin: st.getTime() + dur * 60000, lieu: ev.location, description: ev.description, rappels: [60] } }) });
+    const j = await r.json();
+    if (j.ok && j.agenda === "cree") return { ok:true };
+    if (j.ok) return { ok:false, why:"oldscript" };
+    return { ok:false, why: j.erreur || "erreur" };
+  } catch(e){ return { ok:false, why:"reseau" }; }
+}
+async function agendaStandalone(n){
+  const t = tour(n.tourneeId); const done = n.event === n.date + " " + n.heure;
+  const head = `<div style="text-align:center"><div style="font-size:46px">📅</div><h2>Prochaine tournée</h2>
+    <p style="font-weight:900;font-size:18px;margin:4px 0">${sensIcon(n.sens)} ${dateRel(n.date)} ${sensNom(n.sens)} · ${hTxt(n.heure)}</p><p class="muted" style="margin-top:0">${esc(t?.nom || "")}</p></div>`;
+  const ok = `<div class="card" style="background:var(--go-bg);border-color:#bfe3d2;text-align:center"><b style="color:var(--go)">✔ Ajoutée à votre Google Agenda</b><div class="small muted" style="margin-top:4px">avec une alerte 1 heure avant</div></div>`;
+  const close = `<button class="btn w100" style="margin-top:8px" data-act="close">Fermer</button>`;
+  if (done){ openSheet(head + ok + close); return; }
+  openSheet(head + `<p class="muted" style="text-align:center">⏳ Ajout à votre Google Agenda…</p>`);
+  const r = await agendaViaScript(n);
+  if (r.ok){ n.event = n.date + " " + n.heure; if (S.next) S.next.event = n.event; save(); openSheet(head + ok + close); return; }
+  const why = r.why === "oldscript" ? "Le programme Google de votre Drive doit être mis à jour pour pouvoir créer l'événement (voir les instructions de Claude)."
+    : r.why === "reseau" ? "Pas de connexion pour le moment." : r.why === "nosync" ? "La synchronisation Google n'est pas configurée sur cet appareil." : "Google a refusé : " + esc(r.why);
+  openSheet(head + `<div class="card" style="border-color:#f0c9b5"><b style="color:var(--warn)">L'événement n'a pas pu être créé automatiquement.</b><div class="small" style="margin-top:4px">${why}</div></div>
+    <a class="btn go w100" target="_blank" rel="noopener" href="${esc(gcalUrl(n))}">📅 L'ajouter avec Google Agenda</a>
+    <p class="small muted">Avec ce lien, ajoutez vous-même la notification « 1 heure avant ».</p>
+    <button class="btn w100" data-act="agendaRetry">↻ Réessayer</button>` + close);
+}
 function agendaSheet(n){
+  if (typeof ENDPOINT !== "undefined"){ agendaStandalone(n); return; }
   const t = tour(n.tourneeId);
   const done = n.event === n.date + " " + n.heure;
   openSheet(`<div style="text-align:center"><div style="font-size:46px">📅</div><h2>Prochaine tournée</h2>
@@ -2180,7 +2209,14 @@ document.addEventListener("click", e => {
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
     case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
-      setNext({ tourneeId:tid, sens, date:dk, heure: defaultHeure(tour(tid), sens, dk) }); break; }
+      openSheet(`<div style="text-align:center"><div style="font-size:42px">${sensIcon(sens)}</div><h2>Tournée du ${sensNom(sens)} — ${dateRel(dk)}</h2>
+        <p class="muted" style="margin:0">${esc(tour(tid)?.nom || "")}</p></div>
+        <label class="f">À quelle heure partez-vous ?</label><input class="t" type="time" id="cf_h" value="${defaultHeure(tour(tid), sens, dk)}" style="font-size:26px;font-weight:900;text-align:center">
+        <p class="small muted" style="margin:4px 0 0">Heure proposée d'après ${sens === "soir" ? "la fin des cours et vos trajets habituels" : "le premier ramassage"} : modifiez-la si besoin.</p>
+        <button class="btn go lg" style="margin-top:14px" data-act="planConfirm" data-id="${tid}" data-sens="${sens}" data-date="${dk}">✅ Enregistrer et ajouter à mon agenda<span class="small" style="display:block;font-weight:700;opacity:.9">alerte 1 heure avant</span></button>
+        <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`); break; }
+    case "planConfirm": { const hh = document.getElementById("cf_h").value; if (!hh){ toast("Indiquez l'heure"); break; }
+      setNext({ tourneeId:id, sens: el.dataset.sens, date: el.dataset.date, heure: hh }); break; }
     case "planNo": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const t = tour(tid);
       // la tournée proposée n'a pas lieu : on propose la suivante
       let dk = el.dataset.date, sens = el.dataset.sens;
@@ -2197,6 +2233,7 @@ document.addEventListener("click", e => {
       try { localStorage.setItem(LS_CODE, v); } catch(e){}
       closeSheet(); remoteMaj = {}; pull(true).then(() => { if (pending.size) flush(); }); break; }
     case "changeCode": e.preventDefault(); codeSheet(false); break;
+    case "agendaRetry": if (S.next) agendaStandalone(S.next); break;
     case "pause": { const t = tour(id); t.pause = true; save(); sub = null; render(); window.scrollTo(0,0); toast(`« ${t.nom} » mise en pause — retrouvez-la en bas de l'accueil`); break; }
     case "unpause": { const t = tour(id); t.pause = false; save(); if (sub?.type !== "edit") sub = null; render(); toast(`« ${t.nom} » reprise ✓`); break; }
     case "famMsgs": famMsgsSheet(id); break;
