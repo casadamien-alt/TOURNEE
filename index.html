@@ -200,7 +200,7 @@ function absentPrevu(k, dk, sens){
 }
 function altDaysTxt(x){
   const f = arr => (arr||[]).slice().sort().map(d => JOURS_LONG[d]).join(", ");
-  const j = [x.matin?.length ? "☀️ matin : " + f(x.matin) : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
+  const j = [x.matin?.length ? "☀️ matin : " + f(x.matin) + (x.heureMatin ? " à " + x.heureMatin.replace(":", "h") : "") : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
   if (!x.alterne) return j;
   const td = dayKey(new Date());
   return `${j} · <b>une semaine sur deux</b> (${altWeekOn(x, td) ? "dont cette semaine" : "pas cette semaine, la suivante oui"})`;
@@ -673,7 +673,8 @@ function altFor(k, dk, sens){
 }
 function effKid(k, dk, sens){
   const c = JSON.parse(JSON.stringify(k)); const x = altFor(k, dk, sens);
-  if (x){ c.adresse = x.adresse; c.gps = x.gps || ""; c.altLabel = x.libelle || "autre adresse"; c.homeAdresse = k.adresse; }
+  if (x){ c.adresse = x.adresse; c.gps = x.gps || ""; c.altLabel = x.libelle || "autre adresse"; c.homeAdresse = k.adresse;
+    if (sens === "matin" && x.heureMatin) c.heureMatin = x.heureMatin; }   // heure de ramassage propre à cette adresse
   return c;
 }
 function kidEtab(t, k){ return t.etabs.find(e => e.id === k.etabId) || t.etabs[0]; }
@@ -760,7 +761,7 @@ function defaultHeure(t, sens, dk){
   if (!t) return sens === "matin" ? "07:30" : "16:30";
   const h = horaire(t.etab, dk+"T12:00:00");
   if (sens === "soir") return h.fin || "16:30";   // le soir : heure de récupération des enfants à l'établissement
-  const times = t.enfants.filter(k => k.matin !== false && k.heureMatin).map(k => k.heureMatin).sort();
+  const times = t.enfants.filter(k => k.matin !== false).map(k => effKid(k, dk, "matin").heureMatin).filter(Boolean).sort();
   if (times.length) return times[0];
   if (h.debut){ const m = toMinutes(h.debut) - 60; return p2(Math.floor(m/60))+":"+p2(m%60); }
   return "07:30";
@@ -1108,7 +1109,7 @@ function renderPrep(){
     h += `<label class="card pick ${on?"":"off"}" style="cursor:pointer">
       ${sub.reorder ? `<div class="ord"><button data-act="pUp" data-i="${idx}" ${idx===0?"disabled":""}>▲</button><button data-act="pDown" data-i="${idx}" ${idx===kids.length-1?"disabled":""}>▼</button></div>`
         : `<input type="checkbox" class="chk" data-act="prepToggle" data-id="${k.id}" ${on?"checked":""}>`}
-      <div class="grow"><div class="row"><span class="name grow">${esc(kidName(k))}</span>${sub.sens==="matin" && k.heureMatin ? `<span class="pill m">${k.heureMatin.replace(":","h")}</span>` : ""}</div>
+      <div class="grow"><div class="row"><span class="name grow">${esc(kidName(k))}</span>${(() => { const hm2 = effKid(k, dayKey(new Date()), "matin").heureMatin; return sub.sens==="matin" && hm2 ? `<span class="pill m">${hm2.replace(":","h")}</span>` : ""; })()}</div>
         <div class="addr">📍 ${(() => { const ek = effKid(k, dayKey(new Date()), sub.sens); return esc(ek.adresse || "Adresse manquante") + (ek.altLabel ? ` <span class="pill" style="background:#e6f0ff;color:var(--call)">🏠 ${esc(ek.altLabel)}</span>` : ""); })()}</div>
         ${(() => { const ab = absentPrevu(k, dayKey(new Date()), sub.sens); return ab ? `<div style="margin-top:4px"><span class="pill" style="background:#ffe7d6;color:var(--warn)">📅 Absence prévue${ab.motif ? " : " + esc(ab.motif) : ""}</span></div>` : ""; })()}
         ${com ? `<div class="small muted" style="margin-top:4px">${sub.sens==="matin"?"☀️":"🌙"} ${esc(com)}</div>` : ""}</div></label>`;
@@ -2038,7 +2039,7 @@ function famMsgsSheet(id){
   const keys = ["avantMatin","avantSoir","devant"];
   let h = `<h2>📝 Messages pour la famille de ${esc(k.prenom)}</h2>`;
   keys.forEach(key => {
-    const msg = fill(S.tpl[key], k, k.heureMatin || "");
+    const msg = fill(S.tpl[key], k, effKid(k, dayKey(new Date()), "matin").heureMatin || "");
     h += `<div class="card"><div class="small muted" style="font-weight:800">${TPL_LABELS[key]}</div><div class="msgbox" style="margin:6px 0">${esc(msg)}</div>
       <div class="row">${cs.map(c => `<a class="btn sm sms" data-href="${esc(smsHref(c.tel, msg))}">💬 ${esc(contactLabel(c))}</a>`).join("")}</div></div>`;
   });
@@ -2228,6 +2229,9 @@ function drawKidForm(){
           <input class="t" type="date" id="alt_ref" value="${ea?.alterne ? mondayOf(ea.alterne) : mondayOf(dayKey(new Date()))}" style="width:auto;padding:6px"></label>
         <label class="f">☀️ Ramassage ici le matin, le : <a href="#" class="small" data-act="altAll" data-id="altm">tous</a></label>
         <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}" ${on("matin", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <label class="f">⏰ Heure de ramassage le matin à cette adresse</label>
+        <input class="t" type="time" id="alt_heure" value="${esc(ea?.heureMatin || "")}" style="max-width:180px">
+        <p class="small muted" style="margin:4px 0 0">Laissez vide pour garder l'heure de l'adresse principale${e.heureMatin ? " (" + e.heureMatin.replace(":", "h") + ")" : ""}.</p>
         <label class="f">🌙 Dépôt ici le soir, le : <a href="#" class="small" data-act="altAll" data-id="alts">tous</a></label>
         <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}" ${on("soir", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
         <button class="btn go w100" style="margin-top:10px" data-act="addAlt">${ea ? "✔ Enregistrer les modifications de cette adresse" : "Ajouter cette adresse"}</button>
@@ -2603,7 +2607,7 @@ document.addEventListener("click", e => {
       const so = [...document.querySelectorAll("[data-alts]:checked")].map(c => Number(c.dataset.alts));
       if (!adr){ toast("Indiquez l'adresse"); break; } if (!m.length && !so.length){ toast("Cochez au moins un jour"); break; }
       const alt = document.querySelector("input[name=alt_wk]:checked")?.value === "alt" ? (document.getElementById("alt_ref").value || dayKey(new Date())) : "";
-      const item = { id: altEditId || uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt };
+      const item = { id: altEditId || uid(), libelle: document.getElementById("alt_lib").value.trim(), adresse: adr, gps: document.getElementById("alt_gps").value.trim(), matin: m, soir: so, alterne: alt, heureMatin: document.getElementById("alt_heure").value || "" };
       const wasEdit = !!altEditId;
       editKid.altAdr = wasEdit ? (editKid.altAdr||[]).map(x => x.id === altEditId ? item : x) : [...(editKid.altAdr||[]), item];
       altEditId = null; drawKidForm(); toast((wasEdit ? "Adresse modifiée" : "Adresse ajoutée") + " — pensez à Enregistrer"); break; }
