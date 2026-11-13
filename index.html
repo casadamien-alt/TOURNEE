@@ -749,14 +749,7 @@ function nextSchoolDay(t, fromDk){ let dk = fromDk; for (let i = 0; i < 14; i++)
 function defaultHeure(t, sens, dk){
   if (!t) return sens === "matin" ? "07:30" : "16:30";
   const h = horaire(t.etab, dk+"T12:00:00");
-  if (sens === "soir"){
-    const fin = h.fin || "16:30";
-    // temps moyen entre le départ de chez vous et l'arrivée à l'établissement (historique), sinon 30 min
-    const appro = Object.values(H).flat().filter(e => e.tourneeId === t.id && e.sens === "soir" && e.etapes?.[0]?.at).slice(0,5)
-      .map(e => minsBetween(e.start, e.etapes[0].at)).filter(m => m > 0 && m < 180);
-    const m = toMinutes(fin) - (appro.length ? Math.round(appro.reduce((a,b)=>a+b,0)/appro.length) + 5 : 30);
-    return p2(Math.floor(m/60)) + ":" + p2(m%60);
-  }
+  if (sens === "soir") return h.fin || "16:30";   // le soir : heure de récupération des enfants à l'établissement
   const times = t.enfants.filter(k => k.matin !== false && k.heureMatin).map(k => k.heureMatin).sort();
   if (times.length) return times[0];
   if (h.debut){ const m = toMinutes(h.debut) - 60; return p2(Math.floor(m/60))+":"+p2(m%60); }
@@ -798,7 +791,7 @@ function planForm(def){
     <label class="f">Tournée</label><select class="t" id="pf_t">${S.tournees.map(t => `<option value="${t.id}" ${t.id===tid?"selected":""}>${esc(t.nom)}</option>`).join("")}</select>
     <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pf_d" value="${def.date}"></div>
       <div class="grow"><label class="f">Matin ou soir</label><select class="t" id="pf_s"><option value="matin" ${def.sens==="matin"?"selected":""}>☀️ Matin</option><option value="soir" ${def.sens==="soir"?"selected":""}>🌙 Soir</option></select></div></div>
-    <label class="f">Heure de début de la tournée</label><input class="t" type="time" id="pf_h" value="${def.heure || defaultHeure(tour(tid), def.sens, def.date)}">
+    <label class="f" id="pf_hl">${def.sens === "soir" ? "Heure de récupération des enfants à l'établissement" : "Heure de départ (premier ramassage)"}</label><input class="t" type="time" id="pf_h" value="${def.heure || defaultHeure(tour(tid), def.sens, def.date)}">
     <p class="small muted" id="pf_info"></p>
     <button class="btn go lg" data-act="planSave" style="margin-top:8px">Enregistrer et ajouter à mon agenda</button>
     <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
@@ -808,6 +801,7 @@ function updatePlanInfo(recalc){
   const t = tour(document.getElementById("pf_t")?.value); if (!t) return;
   const dk = document.getElementById("pf_d").value, sens = document.getElementById("pf_s").value;
   if (recalc) document.getElementById("pf_h").value = defaultHeure(t, sens, dk);
+  const hl = document.getElementById("pf_hl"); if (hl) hl.textContent = sens === "soir" ? "Heure de récupération des enfants à l'établissement" : "Heure de départ (premier ramassage)";
   const h = dk ? horaire(t.etab, dk+"T12:00:00") : {};
   document.getElementById("pf_info").textContent = dk ? `${dateLong(dk)} – ${t.etab.nom || "établissement"} : ` + ((h.debut||h.fin) ? `cours ${hTxt(h.debut)||"?"} → ${hTxt(h.fin)||"?"}` : "pas d'horaires de cours ce jour-là") : "";
 }
@@ -817,7 +811,7 @@ function eventData(n){
   const kids = t ? eligible(t, n.sens) : [];
   const iso = m => { const d = new Date(n.date+"T00:00:00"); d.setMinutes(m); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+"T"+p2(d.getHours())+":"+p2(d.getMinutes())+":00"; };
   return {
-    summary: `🚐 Tournée ${n.sens === "matin" ? "du matin" : "du soir"} – ${t?.nom || ""}`,
+    summary: n.sens === "soir" ? `🚐 Tournée du soir – récupération ${hTxt(n.heure)} – ${t?.nom || ""}` : `🚐 Tournée ${n.sens === "midi" ? "du midi" : "du matin"} – ${t?.nom || ""}`,
     startTime: iso(st), endTime: iso(st + dur),
     location: n.sens === "matin" ? (kids[0]?.adresse || t?.etab.adresse || "") : (t?.etab.adresse || ""),
     description: `Tournée du ${n.sens} – ${t?.etab.nom || ""}\nEnfants : ${kids.map(k => k.prenom).join(", ")}`,
@@ -859,7 +853,7 @@ async function agendaViaScript(n){
 async function agendaStandalone(n){
   const t = tour(n.tourneeId); const done = n.event === n.date + " " + n.heure;
   const head = `<div style="text-align:center"><div style="font-size:46px">📅</div><h2>Prochaine tournée</h2>
-    <p style="font-weight:900;font-size:18px;margin:4px 0">${sensIcon(n.sens)} ${dateRel(n.date)} ${sensNom(n.sens)} · ${hTxt(n.heure)}</p><p class="muted" style="margin-top:0">${esc(t?.nom || "")}</p></div>`;
+    <p style="font-weight:900;font-size:18px;margin:4px 0">${sensIcon(n.sens)} ${dateRel(n.date)} ${sensNom(n.sens)} · ${n.sens === "soir" ? "récupération " : ""}${hTxt(n.heure)}</p><p class="muted" style="margin-top:0">${esc(t?.nom || "")}</p></div>`;
   const ok = `<div class="card" style="background:var(--go-bg);border-color:#bfe3d2;text-align:center"><b style="color:var(--go)">✔ Ajoutée à votre Google Agenda</b><div class="small muted" style="margin-top:4px">avec une alerte 1 heure avant</div></div>`;
   const close = `<button class="btn w100" style="margin-top:8px" data-act="close">Fermer</button>`;
   if (done){ openSheet(head + ok + close); return; }
@@ -1027,7 +1021,7 @@ function renderHome(){
   if (S.next){ const n = S.next; const nt = tour(n.tourneeId);
     h += `<div class="card" style="border:2px solid ${n.sens==="matin"?"var(--brand)":"var(--night)"}"><div class="row">
       <span style="font-size:28px">📅</span><div class="grow"><div class="small muted" style="font-weight:800">Prochaine tournée</div>
-      <div style="font-weight:900;font-size:17px">${(d => d[0].toUpperCase()+d.slice(1))(dateRel(n.date))} ${n.sens === "matin" ? "☀️ matin" : "🌙 soir"} · ${hTxt(n.heure)}</div>
+      <div style="font-weight:900;font-size:17px">${(d => d[0].toUpperCase()+d.slice(1))(dateRel(n.date))} ${n.sens === "matin" ? "☀️ matin" : "🌙 soir"} · ${n.sens === "soir" ? "récupération " : ""}${hTxt(n.heure)}</div>
       <div class="small muted">${esc(nt?.nom || "")}</div></div></div>
       <div class="row" style="margin-top:10px"><button class="btn sm" data-act="agendaNext">📅 Agenda</button><button class="btn sm" data-act="editNext">✏️ Modifier</button><button class="btn sm danger" data-act="clearNext">✖ Effacer</button></div></div>`; }
   h += `<p class="muted small" style="margin:0 0 10px;font-weight:700">${JOURS[today.getDay()]} ${today.getDate()} ${MOIS[today.getMonth()]} — choisissez la tournée à lancer</p>`;
@@ -2211,8 +2205,8 @@ document.addEventListener("click", e => {
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
       openSheet(`<div style="text-align:center"><div style="font-size:42px">${sensIcon(sens)}</div><h2>Tournée du ${sensNom(sens)} — ${dateRel(dk)}</h2>
         <p class="muted" style="margin:0">${esc(tour(tid)?.nom || "")}</p></div>
-        <label class="f">À quelle heure partez-vous ?</label><input class="t" type="time" id="cf_h" value="${defaultHeure(tour(tid), sens, dk)}" style="font-size:26px;font-weight:900;text-align:center">
-        <p class="small muted" style="margin:4px 0 0">Heure proposée d'après ${sens === "soir" ? "la fin des cours et vos trajets habituels" : "le premier ramassage"} : modifiez-la si besoin.</p>
+        <label class="f">${sens === "soir" ? "À quelle heure récupérez-vous les enfants à l'établissement ?" : "À quelle heure partez-vous (premier ramassage) ?"}</label><input class="t" type="time" id="cf_h" value="${defaultHeure(tour(tid), sens, dk)}" style="font-size:26px;font-weight:900;text-align:center">
+        <p class="small muted" style="margin:4px 0 0">Heure proposée d'après ${sens === "soir" ? "la fin des cours de ce jour" : "l'heure du premier ramassage"} : modifiez-la si besoin. L'alerte de votre agenda sonnera 1 heure avant.</p>
         <button class="btn go lg" style="margin-top:14px" data-act="planConfirm" data-id="${tid}" data-sens="${sens}" data-date="${dk}">✅ Enregistrer et ajouter à mon agenda<span class="small" style="display:block;font-weight:700;opacity:.9">alerte 1 heure avant</span></button>
         <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`); break; }
     case "planConfirm": { const hh = document.getElementById("cf_h").value; if (!hh){ toast("Indiquez l'heure"); break; }
