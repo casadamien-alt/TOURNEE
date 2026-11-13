@@ -115,6 +115,10 @@ body.running main{padding-bottom:90px}
 table.steps{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
 table.steps td{padding:5px 2px;border-top:1px solid var(--line)}
 table.steps td:last-child{text-align:right;font-weight:800}
+.ocr{background:#fff3bf !important;border-color:#e0b100 !important}
+.bar{height:7px;background:#ece7da;border-radius:4px;overflow:hidden;margin:5px 0}
+.bar i{display:block;height:100%;background:#f2b705;transition:width .3s}
+label.btn{cursor:pointer;text-align:center}
 input[type=time].tm{border:1px solid var(--line);border-radius:10px;padding:6px 8px;background:#fff;font-weight:800}
 </style>
 </head>
@@ -125,6 +129,7 @@ input[type=time].tm{border:1px solid var(--line);border-radius:10px;padding:6px 
   <button data-v="tournees"><span class="i">🚐</span>Tournées</button>
   <button data-v="familles"><span class="i">📇</span>Familles</button>
   <button data-v="historique"><span class="i">🕓</span>Historique</button>
+  <button data-v="carburant"><span class="i">⛽</span>Carburant</button>
   <button data-v="reglages"><span class="i">⚙️</span>Réglages</button>
 </nav>
 <div id="voiceRoot"></div>
@@ -154,7 +159,7 @@ const TPL_LABELS = {
   valideSoir: "Soir – enfant déposé (étape validée)",
   devant: "« Je suis devant chez vous »"
 };
-function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"" }; }
+function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[] }; }
 
 let S = blankState();
 let H = {};                 // historique : { "2026-11": [entrées] }
@@ -266,7 +271,8 @@ function normalize(st){
   const b = blankState();
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
-  st.modeAuto = false;   // mode Android Auto retiré : navigation étape par étape
+  st.modeAuto = false;
+  st.pleins = Array.isArray(st.pleins) ? st.pleins : []; st.vehicules = Array.isArray(st.vehicules) ? st.vehicules : [];   // mode Android Auto retiré : navigation étape par étape
   st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, pause: !!t.pause, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
@@ -357,7 +363,9 @@ async function connectDb(){
   if (!code()){ setStatus("non synchronisé"); codeSheet(false); return; }
   await pull(true);
   if (pending.size) flush();
+  uploadPhotos();
   setInterval(() => { if (!document.hidden && !saving) pull(false); }, 20000);
+  setInterval(() => { if (!document.hidden) uploadPhotos(); }, 120000);
 }
 // enregistrer tout de suite quand on quitte l'appli (passage à l'autre appareil)
 document.addEventListener("visibilitychange", () => {
@@ -967,6 +975,7 @@ function render(){
   else if (view === "tournees" && sub?.type === "edit"){ title = "✏️ " + esc(tour(sub.id)?.nom || "Tournée"); }
   else if (view === "historique") title = "🕓 Historique";
   else if (view === "familles") title = "📇 Familles";
+  else if (view === "carburant") title = "⛽ Carburant";
   else if (view === "reglages") title = "⚙️ Réglages";
   hdr.innerHTML = `<h1>${title}<span class="status" id="syncStatus">${esc(lastStatus)}</span></h1>${subt ? `<div class="sub">${subt}</div>` : ""}`;
   const m = document.getElementById("main");
@@ -978,6 +987,7 @@ function render(){
   }
   if (view === "historique") m.innerHTML = renderHist();
   if (view === "familles") m.innerHTML = renderFamilles();
+  if (view === "carburant") m.innerHTML = renderCarbu();
   if (view === "reglages") m.innerHTML = renderReglages();
   renderVoice();
   renderHelp();
@@ -1572,6 +1582,368 @@ async function saveReport(kind){
   } catch(e){ toast("Erreur lors de la création du relevé"); }
 }
 
+/* =========================================================
+   ⛽ Carburant : pleins, photo du reçu, lecture automatique (OCR)
+   ========================================================= */
+let carbuMonth = monthKey(new Date());
+let pl = null;            // fiche ouverte : { id, isNew, blob, url, ocr:"", pct }
+let photoScriptOld = false;
+const CARBURANTS = ["Gazole", "SP95-E10", "SP95", "SP98", "E85", "GPL", "HVO100", "AdBlue", "Autre"];
+function numFr(s){ if (s == null || s === "") return null; const n = parseFloat(String(s).replace(/\s/g, "").replace(",", ".")); return isFinite(n) ? n : null; }
+function fmtN(n, d){ return n == null || n === "" ? "" : Number(n).toFixed(d).replace(".", ","); }
+function eur(n){ return n == null ? "—" : fmtN(n, 2) + " €"; }
+
+/* ---------- analyse du texte lu sur le reçu ---------- */
+function parseRecu(txt){
+  const lines = String(txt || "").replace(/\r/g, "").split("\n").map(l => l.trim()).filter(Boolean);
+  const U = lines.map(l => l.toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, ""));
+  const all = U.join("\n");
+  const r = {};
+  const N = "(\\d{1,4}\\s?[.,]\\s?\\d{1,3})";
+  const num = s => numFr(String(s).replace(/\s/g, ""));
+  // date et heure
+  let m = all.match(/\b(\d{1,2})\s?[\/.\-]\s?(\d{1,2})\s?[\/.\-]\s?(20\d{2}|\d{2})\b/);
+  if (m){ const d = +m[1], mo = +m[2], y = m[3].length === 2 ? "20" + m[3] : m[3]; if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12) r.date = `${y}-${p2(mo)}-${p2(d)}`; }
+  m = all.match(/\b([01]?\d|2[0-3])\s?[:H]\s?([0-5]\d)(?:\s?:\s?[0-5]\d)?\b/);
+  if (m) r.heure = `${p2(+m[1])}:${m[2]}`;
+  // prix au litre
+  m = all.match(new RegExp(N + "\\s*(?:€|EUR|E)?\\s*\\/\\s*(?:L|LITRE)\\b"));
+  if (m && num(m[1]) > .5 && num(m[1]) < 4) r.prixL = num(m[1]);
+  if (r.prixL == null) U.forEach(l => { if (r.prixL == null && /PRIX|P\.?\s?U\b|UNIT/.test(l)){ const x = l.match(/(\d[.,]\d{3})/); if (x && num(x[1]) > .5 && num(x[1]) < 4) r.prixL = num(x[1]); } });
+  // litres
+  m = all.match(new RegExp("(?<![\\/\\d])" + N + "\\s*(?:L|LITRES?|LTRS?|LT)\\b(?!\\s*\\/)"));
+  if (m && num(m[1]) >= 1 && num(m[1]) <= 300) r.litres = num(m[1]);
+  if (r.litres == null) U.forEach(l => { if (r.litres == null && /VOLUME|QUANTITE|\bQTE\b|LITRES|\bVOL\b/.test(l)){ const x = l.match(/(\d{1,3}[.,]\d{2,3})/); if (x && num(x[1]) >= 1 && num(x[1]) <= 300) r.litres = num(x[1]); } });
+  // montant payé (on écarte TVA, HT et les montants pré-autorisés des pompes 24h/24)
+  const cands = [];
+  U.forEach((l, i) => {
+    if (/TVA|\bHT\b|MAX|PRE.?AUTO|AUTORIS|PLAFOND|REMISE|RENDU|\/\s?L\b/.test(l)) return;
+    const prio = /MONTANT\s*(REEL|PAYE|DEBITE)|A PAYER|NET A PAYER|\bTTC\b/.test(l) ? 3 : /MONTANT|TOTAL|PAYE|DEBIT|REGLE/.test(l) ? 2 : /€|EUR/.test(l) ? 1 : 0;
+    if (!prio) return;
+    let xs = [...l.matchAll(/(\d{1,4}\s?[.,]\s?\d{2})(?!\d)/g)].map(x => num(x[1])).filter(v => v >= 1 && v <= 1000);
+    if (!xs.length && prio >= 2 && U[i+1]) xs = [...U[i+1].matchAll(/(\d{1,4}[.,]\d{2})(?!\d)/g)].map(x => num(x[1])).filter(v => v >= 1 && v <= 1000);
+    xs.forEach(v => cands.push({ v, prio }));
+  });
+  if (cands.length){ cands.sort((a, b) => b.prio - a.prio || b.v - a.v); r.montant = cands[0].v; }
+  // cohérence litres × prix = montant
+  if (r.litres != null && r.prixL != null){
+    const calc = Math.round(r.litres * r.prixL * 100) / 100;
+    if (r.montant == null) r.montant = calc;
+    else if (Math.abs(calc - r.montant) > .06){ const ok = cands.find(c => Math.abs(c.v - calc) <= .06); if (ok) r.montant = ok.v; }
+  }
+  if (r.litres == null && r.montant != null && r.prixL) r.litres = Math.round(r.montant / r.prixL * 100) / 100;
+  if (r.prixL == null && r.montant != null && r.litres) r.prixL = Math.round(r.montant / r.litres * 1000) / 1000;
+  // carburant
+  const carb = [[/ADBLUE/, "AdBlue"], [/HVO/, "HVO100"], [/GAZOLE|GASOIL|GAZOIL|DIESEL|\bB7\b|\bB10\b|\bXTL\b/, "Gazole"], [/E85|SUPERETHANOL|BIOETHANOL/, "E85"],
+    [/SP\s?98|PLOMB\s?98|\bE5\b/, "SP98"], [/E10/, "SP95-E10"], [/SP\s?95|SANS\s?PLOMB|\bSP\b/, "SP95"], [/\bGPL\b/, "GPL"]];
+  for (const [re, v] of carb) if (re.test(all) && !(v === "AdBlue" && carb.slice(1).some(([r2]) => r2.test(all)))){ r.carburant = v; break; }
+  // station : enseigne + ville (ligne « 63000 CLERMONT-FERRAND »)
+  const brands = [["TOTALENERGIES","TotalEnergies"],["ESSO","Esso"],["SHELL","Shell"],["\\bBP\\b","BP"],["AVIA","Avia"],["AGIP","Agip"],["\\bENI\\b","Eni"],
+    ["INTERMARCHE","Intermarché"],["LECLERC","E.Leclerc"],["CARREFOUR","Carrefour"],["AUCHAN","Auchan"],["SUPER U|HYPER U|SYSTEME U|U EXPRESS|STATION U","Station U"],
+    ["CASINO","Casino"],["GEANT","Géant"],["DYNEFF","Dyneff"],["\\bCORA\\b","Cora"],["NETTO","Netto"],["ELAN\\b","Elan"],["VITO","Vito"],["ESTELLE","Estelle"],["TOTAL(?!\\s*(?:TTC|HT|A PAYER|PAYE|:|=|\\d|EUR|€|DU|CB))","TotalEnergies"]];
+  const b = brands.find(([re]) => new RegExp(re).test(all));
+  m = all.match(/\b(\d{5})\s+([A-Z][A-Z' \-]{2,30})/);
+  const ville = m ? m[2].trim().toLowerCase().replace(/(^|[\s\-'])([a-z])/g, (x, p, c) => p + c.toUpperCase()) : "";
+  if (b || ville) r.station = [b ? b[1] : "", ville].filter(Boolean).join(" ");
+  // kilométrage (souvent demandé par les cartes carburant professionnelles)
+  m = all.match(/(?:KILOM[A-Z]*|COMPTEUR|ODOMETRE|\bKMS?\b)\s*[:.=]?\s*(\d[\d .]{1,8}\d)/);
+  if (m){ const k = parseInt(m[1].replace(/\D/g, ""), 10); if (k >= 100 && k < 2000000) r.km = k; }
+  // immatriculation (format AB-123-CD)
+  const fixL = s => s.replace(/0/g, "O").replace(/1/g, "I").replace(/5/g, "S").replace(/8/g, "B");
+  const fixD = s => s.replace(/O/g, "0").replace(/[IL]/g, "1").replace(/S/g, "5").replace(/B/g, "8");
+  const kw = U.find(l => /IMMAT|IMM\b|PLAQUE|VEHICULE/.test(l));
+  m = kw && kw.match(/([A-Z0-9]{2})\s?-?\s?([0-9OILSB]{3})\s?-?\s?([A-Z0-9]{2})\b(?![^\n]*\d{3})/);
+  if (!m) m = all.match(/\b([A-Z]{2})-(\d{3})-([A-Z]{2})\b/);
+  if (m){ const im = `${fixL(m[1])}-${fixD(m[2])}-${fixL(m[3])}`; if (/^[A-Z]{2}-\d{3}-[A-Z]{2}$/.test(im)) r.immat = im; }
+  return r;
+}
+
+/* ---------- photos des reçus : sur l'appareil (IndexedDB) + Google Drive ---------- */
+const RECUS = {
+  p: null,
+  open(){ return this.p || (this.p = new Promise((res, rej) => { const q = indexedDB.open("tournee-recus", 1); q.onupgradeneeded = () => q.result.createObjectStore("recus"); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); })); },
+  async tx(mode, fn){ const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction("recus", mode); const r = fn(t.objectStore("recus")); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); },
+  put(k, v){ return this.tx("readwrite", s => s.put(v, k)).catch(() => null); },
+  get(k){ return this.tx("readonly", s => s.get(k)).catch(() => null); },
+  del(k){ return this.tx("readwrite", s => s.delete(k)).catch(() => null); }
+};
+async function shrinkPhoto(file, max = 1800){
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement("canvas"); cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+    cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+    return await new Promise(res => cv.toBlob(b => res(b || file), "image/jpeg", .82));
+  } catch(e){ return file; } finally { URL.revokeObjectURL(url); }
+}
+function blobToB64(blob){ return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); }); }
+function photoName(p){ return `recu-${p.date || "sans-date"}-${(p.station || "station").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${p.id}.jpg`; }
+const hasDrive = () => typeof ENDPOINT !== "undefined" && typeof code === "function" && !!code();
+async function uploadPhotos(){
+  if (!hasDrive() || uploadPhotos.busy) return;
+  uploadPhotos.busy = true;
+  try {
+    for (const p of (S.pleins || []).filter(x => x.photo && !x.photoDrive)){
+      const blob = await RECUS.get(p.id); if (!blob) continue;
+      const r = await fetch(ENDPOINT, { method: "POST", body: JSON.stringify({ code: code(), photo: { nom: photoName(p), type: blob.type || "image/jpeg", data: await blobToB64(blob) } }) });
+      const j = await r.json();
+      if (!j.ok) break;
+      if (!j.photo){ photoScriptOld = true; break; }       // programme Google pas encore mis à jour
+      photoScriptOld = false;
+      const cur = (S.pleins || []).find(x => x.id === p.id); if (cur){ cur.photoDrive = j.photo; save(); }
+    }
+  } catch(e){}
+  uploadPhotos.busy = false;
+  if (view === "carburant" && !document.querySelector(".sheet")) render();
+}
+async function photoUrl(p){
+  let blob = await RECUS.get(p.id);
+  if (!blob && p.photoDrive && hasDrive()){
+    try {
+      const j = await (await fetch(ENDPOINT + "?code=" + encodeURIComponent(code()) + "&photo=" + encodeURIComponent(p.photoDrive.id))).json();
+      if (j.ok && j.data){ const bin = atob(j.data); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); blob = new Blob([u8], { type: j.type || "image/jpeg" }); RECUS.put(p.id, blob); }
+    } catch(e){}
+  }
+  return blob ? URL.createObjectURL(blob) : "";
+}
+
+/* ---------- lecture du texte (Tesseract, chargé seulement quand on en a besoin) ---------- */
+let tessP = null;
+function loadTess(){
+  return tessP || (tessP = new Promise((res, rej) => {
+    if (window.Tesseract) return res(window.Tesseract);
+    const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload = () => res(window.Tesseract); s.onerror = () => { tessP = null; rej(new Error("chargement")); };
+    document.head.appendChild(s);
+  }));
+}
+async function ocrBlob(blob, onProg){
+  const T = await loadTess();
+  const w = await T.createWorker("fra", 1, { logger: m => { if (m.status === "recognizing text") onProg(m.progress); } });
+  try { const { data } = await w.recognize(blob); return data.text || ""; } finally { try { w.terminate(); } catch(e){} }
+}
+const PL_FIELDS = { date: "pl_date", heure: "pl_heure", station: "pl_station", carburant: "pl_carb", litres: "pl_litres", prixL: "pl_prix", montant: "pl_montant", km: "pl_km", immat: "pl_immat" };
+async function runOcr(){
+  if (!pl || !pl.blob) return;
+  const id = pl.id; pl.ocrState = "lecture"; document.getElementById("pl_ocrbtn")?.remove(); pl.pct = 0; plStatus();
+  try {
+    const txt = await ocrBlob(pl.blob, p => { if (pl && pl.id === id){ pl.pct = p; plStatus(); } });
+    if (!pl || pl.id !== id) return;
+    pl.ocr = txt; const r = parseRecu(txt); const lus = [];
+    Object.entries(PL_FIELDS).forEach(([k, elId]) => {
+      const el = document.getElementById(elId); if (!el || r[k] == null) return;
+      if (el.value && !el.dataset.auto) return;          // ne jamais écraser ce que vous avez tapé
+      let v = r[k];
+      if (k === "litres" || k === "montant") v = fmtN(v, 2); else if (k === "prixL") v = fmtN(v, 3);
+      if (k === "carburant" && ![...el.options].some(o => o.value === v)) return;
+      el.value = v; el.dataset.auto = "1"; el.classList.add("ocr"); lus.push(k);
+    });
+    if (r.immat){ const vh = (S.vehicules || []).find(x => x.immat === r.immat); const el = document.getElementById("pl_veh"); if (vh && el && (!el.value || el.dataset.auto)){ el.value = vh.nom; el.classList.add("ocr"); } }
+    pl.lus = lus; pl.ocrState = lus.length ? "ok" : "rien"; plStatus();
+  } catch(e){ if (pl && pl.id === id){ pl.ocrState = "erreur"; plStatus(); } }
+}
+const LUS_LIB = { date:"date", heure:"heure", station:"station", carburant:"carburant", litres:"litres", prixL:"prix au litre", montant:"montant", km:"kilométrage", immat:"immatriculation" };
+function plStatus(){
+  const el = document.getElementById("pl_status"); if (!el || !pl) return;
+  const s = pl.ocrState;
+  el.innerHTML = s === "lecture" ? `🔎 Lecture du reçu… <b>${Math.round((pl.pct || 0) * 100)} %</b><div class="bar"><i style="width:${Math.round((pl.pct || 0) * 100)}%"></i></div><span class="small muted">La 1re fois, l'outil de lecture se télécharge (quelques secondes). Vous pouvez remplir en même temps.</span>`
+    : s === "ok" ? `✓ Lu sur le reçu : <b>${pl.lus.map(k => LUS_LIB[k]).join(", ")}</b>.<br><span class="small">Vérifiez les cases <span class="ocr" style="padding:0 4px;border-radius:4px">surlignées</span> et complétez le reste.</span>${pl.lus.includes("km") ? "" : `<br><span class="small muted">Kilométrage non trouvé : tapez-le à la main.</span>`}`
+    : s === "rien" ? `⚠️ Je n'ai pas réussi à lire les montants sur cette photo. Remplissez à la main, ou reprenez la photo bien à plat, de près et avec de la lumière.`
+    : s === "erreur" ? `⚠️ Lecture automatique impossible (pas de connexion ?). Remplissez à la main : la photo est quand même gardée.`
+    : "";
+}
+
+/* ---------- écran Carburant ---------- */
+function pleinsDuMois(mk){ return (S.pleins || []).filter(p => (p.date || "").slice(0, 7) === mk).sort((a, b) => (b.date + (b.heure || "")).localeCompare(a.date + (a.heure || ""))); }
+function conso(p){
+  if (!p.km || !p.litres) return null;
+  const prev = (S.pleins || []).filter(x => x.id !== p.id && x.km && x.km < p.km && (x.vehicule || "") === (p.vehicule || "")).sort((a, b) => b.km - a.km)[0];
+  if (!prev || p.km - prev.km > 3000) return null;
+  return { km: p.km - prev.km, l100: p.litres / (p.km - prev.km) * 100 };
+}
+function renderCarbu(){
+  const months = [...new Set((S.pleins || []).map(p => (p.date || "").slice(0, 7)).filter(Boolean).concat([monthKey(new Date()), carbuMonth]))].sort().reverse();
+  const items = pleinsDuMois(carbuMonth);
+  const tot = items.reduce((a, p) => a + (p.montant || 0), 0), lit = items.reduce((a, p) => a + (p.litres || 0), 0);
+  const waiting = (S.pleins || []).filter(p => p.photo && !p.photoDrive).length;
+  let h = `<label class="btn go lg w100" style="margin-bottom:8px">📷 Photographier un reçu<input type="file" accept="image/*" capture="environment" id="carbuCam" style="display:none"></label>
+    <div class="row" style="margin-bottom:12px">
+      <label class="btn grow">🖼️ Photo déjà prise<input type="file" accept="image/*" id="carbuGal" style="display:none"></label>
+      <button class="btn grow" data-act="plNew">✍️ Sans photo</button></div>
+    <div class="row" style="margin-bottom:12px"><select class="t grow" id="carbuMonth">${months.map(mk => `<option value="${mk}" ${mk === carbuMonth ? "selected" : ""}>${moisTxt(mk)}</option>`).join("")}</select>
+      <button class="btn" data-act="carbuReport" ${(S.pleins || []).length ? "" : "disabled"}>📄 Relevé</button></div>
+    <div class="tot"><div><span class="small muted">Pleins</span><b>${items.length}</b></div><div><span class="small muted">Litres</span><b>${fmtN(lit, 1) || "0"}</b></div><div><span class="small muted">Total</span><b>${eur(tot)}</b></div></div>`;
+  if (hasDrive() && waiting && photoScriptOld) h += `<div class="card small" style="border-color:var(--warn)">📱 ${waiting} photo${waiting > 1 ? "s" : ""} de reçu reste${waiting > 1 ? "nt" : ""} sur ce téléphone : le programme Google doit être mis à jour pour les ranger dans votre Drive (voir le guide).</div>`;
+  if (!items.length) h += `<div class="card empty muted"><div class="big">⛽</div>Aucun plein enregistré ce mois-ci.<br><span class="small">Après chaque plein, photographiez le ticket : l'application lit le montant, les litres, le prix au litre, la date, la station et le carburant.</span></div>`;
+  items.forEach(p => {
+    const c = conso(p);
+    h += `<div class="card hist" data-act="plOpen" data-id="${p.id}" style="cursor:pointer">
+      <span style="font-size:24px">${p.photo ? "🧾" : "⛽"}</span>
+      <div class="grow"><div style="font-weight:900">${esc(p.station || "Station")}${p.carburant ? ` · <span class="muted">${esc(p.carburant)}</span>` : ""}</div>
+        <div class="small muted">${p.date ? `${JOURS[new Date(p.date + "T12:00").getDay()]} ${dFr(p.date)}` : ""}${p.heure ? " " + hTxt(p.heure) : ""} · ${p.litres != null ? fmtN(p.litres, 2) + " L" : "? L"}${p.prixL ? " à " + fmtN(p.prixL, 3) + " €/L" : ""}</div>
+        <div class="small muted">${p.vehicule ? "🚐 " + esc(p.vehicule) : ""}${p.km ? (p.vehicule ? " · " : "") + p.km.toLocaleString("fr-FR") + " km" : ""}${c ? ` · ≈ ${fmtN(c.l100, 1)} L/100` : ""}</div></div>
+      <span class="dur">${eur(p.montant)}</span></div>`;
+  });
+  return h;
+}
+function lastPlein(){ return (S.pleins || []).slice().sort((a, b) => (b.date + (b.heure || "")).localeCompare(a.date + (a.heure || "")))[0]; }
+function plSheet(p){
+  const known = [...new Set((S.pleins || []).map(x => x.station).filter(Boolean))];
+  const auto = pl.isNew ? ' data-auto="1"' : "";
+  openSheet(`<h2>⛽ ${pl.isNew ? "Nouveau plein" : "Plein du " + dFr(p.date)}</h2>
+    <div id="pl_img">${pl.url ? plImg(pl.url) : ""}</div>
+    ${!pl.url && p.photo ? `<p class="small muted">🧾 Reçu enregistré${p.photoDrive ? ` dans votre Drive — <a href="${esc(p.photoDrive.url)}" target="_blank" rel="noopener">l'ouvrir</a>` : ""}.</p>` : ""}
+    <div id="pl_status" class="small" style="margin:8px 0"></div>
+    ${(pl.blob || p.photo) && !pl.ocrState ? `<button class="btn sm" id="pl_ocrbtn" data-act="plOcr">🔎 Lire le reçu</button>` : ""}
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pl_date" value="${esc(p.date || dayKey(new Date()))}"${auto}></div>
+      <div class="grow"><label class="f">Heure</label><input class="t" type="time" id="pl_heure" value="${esc(p.heure || hmInput(new Date()))}"${auto}></div></div>
+    <label class="f">Station</label><input class="t" id="pl_station" list="plStations" value="${esc(p.station || "")}" placeholder="ex. TotalEnergies Riom">
+    <datalist id="plStations">${known.map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+    <label class="f">Carburant</label><select class="t" id="pl_carb"><option value=""></option>${CARBURANTS.map(c => `<option ${c === p.carburant ? "selected" : ""}>${c}</option>`).join("")}</select>
+    <div class="row"><div class="grow"><label class="f">Litres</label><input class="t" id="pl_litres" inputmode="decimal" value="${fmtN(p.litres, 2)}" placeholder="42,35"></div>
+      <div class="grow"><label class="f">Prix / litre</label><input class="t" id="pl_prix" inputmode="decimal" value="${fmtN(p.prixL, 3)}" placeholder="1,689"></div></div>
+    <label class="f">Montant payé (€)</label><input class="t" id="pl_montant" inputmode="decimal" value="${fmtN(p.montant, 2)}" placeholder="71,53" style="font-size:20px;font-weight:900">
+    <p class="small muted" style="margin:4px 0 0">Si deux des trois cases sont remplies, la troisième se calcule toute seule.</p>
+    <label class="f">Kilométrage au compteur</label><input class="t" id="pl_km" inputmode="numeric" value="${p.km || ""}" placeholder="ex. 125430">
+    <div class="row"><div class="grow"><label class="f">Véhicule</label><input class="t" id="pl_veh" list="plVehs" value="${esc(p.vehicule || "")}" placeholder="ex. Trafic blanc"></div>
+      <div class="grow"><label class="f">Immatriculation</label><input class="t" id="pl_immat" value="${esc(p.immat || "")}" placeholder="AB-123-CD" style="text-transform:uppercase"></div></div>
+    <datalist id="plVehs">${(S.vehicules || []).map(v => `<option value="${esc(v.nom)}">`).join("")}</datalist>
+    <label class="f">Remarque</label><input class="t" id="pl_note" value="${esc(p.note || "")}" placeholder="ex. payé avec la carte de l'employeur">
+    <button class="btn go lg" style="margin-top:14px" data-act="plSave">✓ Enregistrer le plein</button>
+    ${pl.isNew ? "" : `<button class="btn sm danger" style="margin-top:10px" data-act="plDel">🗑 Supprimer ce plein</button>`}
+    <button class="btn w100" style="margin-top:8px" data-act="plCancel">Annuler</button>`);
+  plStatus();
+}
+function plImg(u){ return `<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="Reçu" style="width:100%;max-height:220px;object-fit:contain;background:#f4f1ea;border-radius:12px"></a>`; }
+function newPlein(extra){
+  const lp = lastPlein();
+  const v = lp ? { vehicule: lp.vehicule || "", immat: lp.immat || "" } : { vehicule: (S.vehicules || [])[0]?.nom || "", immat: (S.vehicules || [])[0]?.immat || "" };
+  return Object.assign({ id: uid(), date: "", heure: "", station: "", carburant: lp?.carburant || "", litres: null, prixL: null, montant: null, km: null, note: "", photo: false, photoDrive: null }, v, extra || {});
+}
+async function plFromFile(file){
+  if (!file) return;
+  const blob = await shrinkPhoto(file);
+  const p = newPlein({ photo: true });
+  pl = { id: p.id, isNew: true, blob, url: URL.createObjectURL(blob), draft: p };
+  plSheet(p); runOcr();
+}
+async function plOpen(id){
+  const p = (S.pleins || []).find(x => x.id === id); if (!p) return;
+  pl = { id, isNew: false, draft: p };
+  plSheet(p);
+  if (p.photo){ const u = await photoUrl(p); if (u && pl && pl.id === id){ pl.url = u; pl.blob = await RECUS.get(id); const box = document.getElementById("pl_img"); if (box) box.innerHTML = plImg(u); } }
+}
+function plAutoCalc(changed){
+  const L = document.getElementById("pl_litres"), P = document.getElementById("pl_prix"), M = document.getElementById("pl_montant"); if (!L) return;
+  const l = numFr(L.value), p = numFr(P.value), m = numFr(M.value);
+  if (changed !== "pl_montant" && l && p && (!M.value || M.dataset.calc)){ M.value = fmtN(l * p, 2); M.dataset.calc = "1"; }
+  else if (changed !== "pl_litres" && m && p && (!L.value || L.dataset.calc)){ L.value = fmtN(m / p, 2); L.dataset.calc = "1"; }
+  else if (changed !== "pl_prix" && m && l && (!P.value || P.dataset.calc)){ P.value = fmtN(m / l, 3); P.dataset.calc = "1"; }
+}
+async function plSave(){
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  const p = pl.draft;
+  Object.assign(p, { date: g("pl_date") || dayKey(new Date()), heure: g("pl_heure"), station: g("pl_station"), carburant: g("pl_carb"),
+    litres: numFr(g("pl_litres")), prixL: numFr(g("pl_prix")), montant: numFr(g("pl_montant")), km: g("pl_km") ? parseInt(g("pl_km").replace(/\D/g, ""), 10) || null : null,
+    vehicule: g("pl_veh"), immat: g("pl_immat").toUpperCase(), note: g("pl_note") });
+  if (pl.ocr && !p.ocr) p.ocr = pl.ocr.slice(0, 2000);
+  if (p.vehicule || p.immat){
+    S.vehicules = S.vehicules || [];
+    const vh = S.vehicules.find(v => (p.immat && v.immat === p.immat) || (p.vehicule && v.nom === p.vehicule));
+    if (vh){ if (p.vehicule) vh.nom = p.vehicule; if (p.immat) vh.immat = p.immat; } else S.vehicules.push({ id: uid(), nom: p.vehicule || p.immat, immat: p.immat });
+  }
+  if (pl.isNew){
+    S.pleins = S.pleins || []; S.pleins.push(p);
+    if (pl.blob){ p.photo = true; await RECUS.put(p.id, pl.blob); }
+  }
+  save(); carbuMonth = (p.date || "").slice(0, 7) || carbuMonth;
+  pl = null; closeSheet(); render(); toast("Plein enregistré ✓");
+  uploadPhotos();
+}
+
+/* ---------- relevé des pleins (PDF et texte) ---------- */
+let crep = null;
+function crepItems(){ return (S.pleins || []).filter(p => (p.date || "").slice(0, 7) === crep.month).sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || ""))); }
+function crepRows(items){ return items.map(p => ({ date: dFr(p.date) + (p.heure ? " " + hTxt(p.heure) : ""), station: p.station || "—", carb: p.carburant || "—", veh: [p.vehicule, p.immat].filter(Boolean).join(" · ") || "—",
+  km: p.km ? p.km.toLocaleString("fr-FR").replace(/ /g, " ") : "—", litres: p.litres != null ? fmtN(p.litres, 2) : "—", prix: p.prixL ? fmtN(p.prixL, 3) : "—", montant: p.montant != null ? fmtN(p.montant, 2) + " €" : "—", recu: p.photo ? "oui" : "non" })); }
+function crepTot(items){ return { n: items.length, l: items.reduce((a, p) => a + (p.litres || 0), 0), m: items.reduce((a, p) => a + (p.montant || 0), 0) }; }
+function carbuReportSheet(){
+  const months = [...new Set((S.pleins || []).map(p => (p.date || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  if (!crep || !months.includes(crep.month)) crep = { month: months.includes(carbuMonth) ? carbuMonth : months[0] };
+  const items = crepItems(), t = crepTot(items);
+  openSheet(`<h2>📄 Relevé des pleins</h2>
+    <label class="f">Mois</label><select class="t" id="crep_month">${months.map(mk => `<option value="${mk}" ${mk === crep.month ? "selected" : ""}>${moisTxt(mk)}</option>`).join("")}</select>
+    <div class="card" style="margin-top:12px;padding:10px 12px"><b>${t.n} plein${t.n > 1 ? "s" : ""}</b> · ${fmtN(t.l, 2)} L · <b>${eur(t.m)}</b>
+      <table class="steps" style="margin-top:6px">${crepRows(items).map(r => `<tr><td>${esc(r.date)} · ${esc(r.station)}</td><td>${esc(r.montant)}</td></tr>`).join("")}</table></div>
+    <button class="btn go lg" data-act="crepPdf" ${items.length ? "" : "disabled"}>📄 Fichier PDF</button>
+    <button class="btn w100" style="margin-top:8px" data-act="crepText" ${items.length ? "" : "disabled"}>📋 Copier en texte (pour un e-mail)</button>
+    <p class="small muted">Le relevé liste chaque plein : date, station, carburant, véhicule, kilométrage, litres, prix au litre et montant, avec le total du mois. ${hasDrive() ? "Les photos des reçus sont rangées dans le dossier « Ma tournée – reçus » de votre Google Drive : vous pouvez le partager avec votre employeur." : ""}</p>
+    <button class="btn w100" data-act="close">Fermer</button>`);
+}
+function crepText(){
+  const items = crepItems(), t = crepTot(items);
+  const L = [`RELEVÉ DES PLEINS DE CARBURANT — ${moisTxt(crep.month)}`]; if (S.chauffeur) L.push(`Chauffeur : ${S.chauffeur}`); L.push("");
+  crepRows(items).forEach(r => L.push(`${r.date} — ${r.station} — ${r.carb} — ${r.litres} L à ${r.prix} €/L = ${r.montant}${r.km !== "—" ? " — " + r.km + " km" : ""}${r.veh !== "—" ? " — " + r.veh : ""}`));
+  L.push("", `TOTAL : ${t.n} plein(s) — ${fmtN(t.l, 2)} L — ${eur(t.m)}`);
+  return L.join("\n");
+}
+function crepPdf(){
+  const items = crepItems(), t = crepTot(items), rows = crepRows(items);
+  const W = 842, Hh = 595, M = 36;
+  const cols = [["Date","date",86],["Station","station",150],["Carburant","carb",66],["Véhicule","veh",130],["Km","km",64],["Litres","litres",52],["Prix/L","prix",50],["Montant","montant",70],["Reçu","recu",W-2*M-668]];
+  const pages = []; let ops = []; let y;
+  const T = (x, yy, s, size = 9, bold = false) => ops.push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(s)}) Tj ET`);
+  const header = () => { ops.push(`0.95 0.92 0.84 rg ${M} ${(y-16).toFixed(1)} ${W-2*M} 20 re f 0 g`); let x = M + 4; cols.forEach(([l,,w]) => { T(x, y-10, l, 8.5, true); x += w; }); y -= 22; };
+  const newPage = first => {
+    if (ops.length) pages.push(ops); ops = []; y = Hh - M;
+    if (first){
+      T(M, y-14, "Relevé des pleins de carburant", 18, true); y -= 32;
+      T(M, y, moisTxt(crep.month).replace(/^./, c => c.toUpperCase()), 11, true); y -= 16;
+      if (S.chauffeur){ T(M, y, "Chauffeur : " + S.chauffeur, 10); y -= 14; }
+      T(M, y, `${t.n} plein${t.n > 1 ? "s" : ""} — ${fmtN(t.l, 2)} litres — total ${eur(t.m)}`, 10, true); y -= 20;
+    } else { T(M, y-8, "Relevé des pleins — " + moisTxt(crep.month) + " (suite)", 9, true); y -= 20; }
+    header();
+  };
+  newPage(true);
+  rows.forEach((r, i) => {
+    const wr = cols.map(([,k,w]) => wrap(r[k], w - 8, 9));
+    const h = Math.max(...wr.map(l => l.length)) * 11 + 7;
+    if (y - h < M + 30) newPage(false);
+    if (i % 2) ops.push(`0.98 0.97 0.95 rg ${M} ${(y-h+4).toFixed(1)} ${W-2*M} ${h} re f 0 g`);
+    let x = M + 4; wr.forEach((ls, c) => { ls.forEach((s, j) => T(x, y - 8 - j*11, s, 9, c === 0 || c === 7)); x += cols[c][2]; });
+    y -= h; ops.push(`0.8 G 0.5 w ${M} ${(y+4).toFixed(1)} m ${W-M} ${(y+4).toFixed(1)} l S`);
+  });
+  y -= 10; if (y < M + 30) newPage(false);
+  T(M, y, `Total du mois : ${fmtN(t.l, 2)} L — ${eur(t.m)}`, 11, true);
+  if (hasDrive()){ y -= 16; T(M, y, "Photos des reçus : dossier « Ma tournée – reçus » du Google Drive du chauffeur.", 9); }
+  pages.push(ops);
+  const objs = []; const add = o => { objs.push(o); return objs.length; };
+  const fN = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const fB = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pagesId = objs.length + 1 + pages.length * 2; const kids = [];
+  const gen = `Édité le ${dFr(dayKey(new Date()))} avec Ma tournée scolaire`;
+  pages.forEach((p, i) => {
+    const stream = p.join("\n") + `\nBT /F1 8 Tf ${M} 20 Td (${pdfStr(gen)}) Tj ET BT /F1 8 Tf ${W-M-60} 20 Td (${pdfStr(`Page ${i+1} / ${pages.length}`)}) Tj ET`;
+    const c = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${Hh}] /Resources << /Font << /F1 ${fN} 0 R /F2 ${fB} 0 R >> >> /Contents ${c} 0 R >>`));
+  });
+  add(`<< /Type /Pages /Kids [${kids.map(k => k + " 0 R").join(" ")}] /Count ${kids.length} >>`);
+  const cat = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let out = "%PDF-1.4\n"; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i+1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("");
+  out += `trailer\n<< /Size ${objs.length+1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new Blob([out], { type: "application/pdf" });
+}
+async function saveCarbuPdf(){
+  const blob = crepPdf(), name = `releve-carburant-${crep.month}.pdf`;
+  if (typeof downloadBlob === "function"){ downloadBlob(blob, name); toast("Relevé enregistré dans vos téléchargements ✓"); return; }
+  if (dlNs){ try { await dlNs.save({ filename: name, data: blob }); toast("Relevé enregistré ✓"); return; } catch(e){ if (e?.code === "declined") return; } }
+  copyText(crepText()); toast("Fichier impossible ici : le texte est copié à la place");
+}
+
 /* ---------- Familles : contacter à tout moment ---------- */
 let famQ = "";
 function renderFamilles(){
@@ -1723,6 +2095,7 @@ function addrField(attr, value, ph){
 document.addEventListener("toggle", e => { if (e.target.id === "pausedBox") pausedOpen = e.target.open; }, true);
 document.addEventListener("input", e => {
   if (e.target.id === "famSearch"){ famQ = e.target.value; const pos = e.target.selectionStart; render(); const el = document.getElementById("famSearch"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(x){} } return; }
+  if (e.target.id && e.target.id.startsWith("pl_")){ const x = e.target; delete x.dataset.auto; delete x.dataset.calc; x.classList.remove("ocr"); return; }
   const t = e.target; if (!t.dataset || !t.dataset.addr) return;
   const box = t.closest(".addrbox"); if (!box) return;
   box.querySelector("[data-addrcheck]").href = mapsSearch(t.value);
@@ -2135,6 +2508,16 @@ document.addEventListener("click", e => {
   const i = Number(el.dataset.i), id = el.dataset.id;
   switch (a){
     case "close": closeSheet(); break;
+    case "plNew": pl = { id: null, isNew: true }; { const p = newPlein(); pl.id = p.id; pl.draft = p; plSheet(p); } break;
+    case "plOpen": plOpen(id); break;
+    case "plSave": plSave(); break;
+    case "plCancel": pl = null; closeSheet(); break;
+    case "plOcr": (async () => { if (!pl.blob) pl.blob = await RECUS.get(pl.id); if (pl.blob) runOcr(); else toast("Photo introuvable sur cet appareil"); })(); break;
+    case "plDel": if (el.dataset.ok !== "1"){ el.dataset.ok = "1"; el.textContent = "Confirmer la suppression ?"; break; }
+      S.pleins = S.pleins.filter(x => x.id !== pl.id); RECUS.del(pl.id); save(); pl = null; closeSheet(); render(); toast("Plein supprimé"); break;
+    case "carbuReport": carbuReportSheet(); break;
+    case "crepPdf": saveCarbuPdf(); break;
+    case "crepText": copyText(crepText()); break;
     case "back": sub = null; render(); window.scrollTo(0,0); break;
     case "newTour": openSheet(`<h2>➕ Nouvelle tournée</h2>
       <label class="f">Nom de la tournée</label><input class="t" id="nt_nom" placeholder="ex. Circuit IME Les Tilleuls">
@@ -2320,6 +2703,11 @@ document.addEventListener("change", e => {
     en[key] = d.toISOString(); en.duree = Math.max(0, Math.round(minsBetween(en.start, en.end)));
     saveHist(mk); render(); toast("Horaire corrigé"); return;
   }
+  if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
+  if (t.id === "carbuMonth"){ carbuMonth = t.value; render(); return; }
+  if (t.id === "crep_month"){ crep.month = t.value; carbuReportSheet(); return; }
+  if (t.id === "pl_litres" || t.id === "pl_prix" || t.id === "pl_montant"){ plAutoCalc(t.id); return; }
+  if (t.id === "pl_veh"){ const vh = (S.vehicules || []).find(v => v.nom === t.value); const im = document.getElementById("pl_immat"); if (vh && vh.immat && im) im.value = vh.immat; return; }
   if (t.id === "histMonth"){ histMonth = t.value; openHist = null; render(); return; }
   if (t.id === "rep_month"){ rep.month = t.value; reportSheet(); return; }
   if (t.id === "rep_week"){ if (t.value) rep.week = t.value; reportSheet(); return; }
