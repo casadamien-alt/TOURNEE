@@ -1382,6 +1382,14 @@ function repEntries(){
   if (rep.mode === "semaine"){ const m = mondayOf(rep.week); const su = addDays(m, 6); return all.filter(e => e.date >= m && e.date <= su); }
   return all.filter(e => rep.days.includes(e.date));
 }
+function repPleins(){
+  const all = (S.pleins || []).filter(p => p.date).sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
+  if (rep.mode === "mois") return all.filter(p => p.date.slice(0, 7) === rep.month);
+  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); const su = addDays(m, 6); return all.filter(p => p.date >= m && p.date <= su); }
+  return all.filter(p => rep.days.includes(p.date));
+}
+const FUEL_COLS_PDF = [["Date","date",86],["Station","station",150],["Carburant","carb",66],["Véhicule","veh",130],["Km","km",64],["Litres","litres",52],["Prix/L","prix",50],["Montant","montant",70],["Reçu","recu",102]];
+const FUEL_COLS_PNG = [["Date","date",150],["Station","station",230],["Carburant","carb",100],["Véhicule","veh",200],["Km","km",90],["Litres","litres",80],["Prix/L","prix",80],["Montant","montant",120],["Reçu","recu",110]];
 function repPeriode(){
   if (rep.mode === "mois") return moisTxt(rep.month);
   if (rep.mode === "semaine"){ const m = mondayOf(rep.week); return `semaine du ${dateLong(m)} au ${dateLong(addDays(m, 6))}`; }
@@ -1409,7 +1417,7 @@ function reportSheet(){
   }
   const all = allEntries();
   const months = [...new Set(all.map(e => monthKey(e.start)))].sort().reverse();
-  const items = repEntries(); const m = repMeta(items);
+  const items = repEntries(); const m = repMeta(items); const fu = repPleins(); const ft = crepTot(fu);
   let ctl = "";
   if (rep.mode === "mois") ctl = `<label class="f">Mois</label><select class="t" id="rep_month">${months.map(mk => `<option value="${mk}" ${mk===rep.month?"selected":""}>${moisTxt(mk)}</option>`).join("")}</select>`;
   else if (rep.mode === "semaine") ctl = `<label class="f">Un jour de la semaine voulue</label><input class="t" type="date" id="rep_week" value="${rep.week}">
@@ -1428,11 +1436,14 @@ function reportSheet(){
       <div class="small muted" style="margin-top:2px">${esc(repPeriode())}</div>
       ${items.length ? `<table class="steps" style="margin-top:6px">${repRows(items).slice(0,40).map(r => `<tr><td>${esc(r.date)} · ${r.trajet}</td><td>${r.depart} → ${r.arrivee} · ${esc(r.duree)}</td></tr>`).join("")}</table>${items.length > 40 ? `<p class="small muted">… et ${items.length-40} autres</p>` : ""}` : `<p class="small muted" style="margin:6px 0 0">Aucune tournée sur cette période.</p>`}
     </div>
+    ${fu.length ? `<div class="card" style="padding:10px 12px"><b>⛽ Carburant : ${ft.n} plein${ft.n>1?"s":""}</b> · ${fmtN(ft.l, 2)} L · <b>${eur(ft.m)}</b>
+      <table class="steps" style="margin-top:6px">${crepRows(fu).map(r => `<tr><td>${esc(r.date)} · ${esc(r.station)}</td><td>${esc(r.montant)}</td></tr>`).join("")}</table>
+      <p class="small muted" style="margin:6px 0 0">Ajouté à la fin du relevé, après les tournées.</p></div>` : ""}
     <div class="row" style="margin-top:4px">
-      <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length?"":"disabled"}>📄 Fichier PDF</button>
-      <button class="btn grow" style="padding:14px" data-act="repPng" ${items.length?"":"disabled"}>🖼️ Image</button></div>
-    <button class="btn w100" style="margin-top:8px" data-act="repText" ${items.length?"":"disabled"}>📋 Copier en texte (pour un e-mail)</button>
-    <p class="small muted">Le relevé indique pour chaque tournée : le jour, le trajet, l'heure de départ et d'arrivée, la durée, le nombre d'enfants et les enfants absents. Vous pourrez ensuite l'envoyer par e-mail ou par message.</p>
+      <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length||fu.length?"":"disabled"}>📄 Fichier PDF</button>
+      <button class="btn grow" style="padding:14px" data-act="repPng" ${items.length||fu.length?"":"disabled"}>🖼️ Image</button></div>
+    <button class="btn w100" style="margin-top:8px" data-act="repText" ${items.length||fu.length?"":"disabled"}>📋 Copier en texte (pour un e-mail)</button>
+    <p class="small muted">Le relevé indique pour chaque tournée : le jour, le trajet, l'heure de départ et d'arrivée, la durée, le nombre d'enfants et les enfants absents, puis les pleins de carburant de la période. Vous pourrez ensuite l'envoyer par e-mail ou par message.</p>
     <button class="btn w100" data-act="close">Fermer</button>`);
 }
 function repText(){
@@ -1444,6 +1455,11 @@ function repText(){
   L.push("");
   repRows(items).forEach(r => L.push(`${r.date} — ${r.tournee} — ${r.trajet} : départ ${r.depart}, arrivée ${r.arrivee}, durée ${r.duree}, ${r.nb} enfant(s)${r.absents !== "—" ? ", absents : " + r.absents : ""}`));
   L.push("", `TOTAL : ${m.n} tournée(s) — ${durTxt(m.tot)}`);
+  const fu = repPleins();
+  if (fu.length){ const ft = crepTot(fu);
+    L.push("", "CARBURANT");
+    crepRows(fu).forEach(r => L.push(`${r.date} — ${r.station} — ${r.carb} — ${r.litres} L à ${r.prix} €/L = ${r.montant}${r.km !== "—" ? " — " + r.km + " km" : ""}${r.veh !== "—" ? " — " + r.veh : ""}`));
+    L.push(`TOTAL CARBURANT : ${ft.n} plein(s) — ${fmtN(ft.l, 2)} L — ${eur(ft.m)}`); }
   return L.join("\n");
 }
 
@@ -1475,12 +1491,12 @@ function makePdf(){
   const items = repEntries(); const m = repMeta(items); const rows = repRows(items);
   const W = 842, Hh = 595, M = 36;
   const cols = [["Date","date",88],["Tournée","tournee",130],["Trajet","trajet",48],["Départ","depart",52],["Arrivée","arrivee",54],["Durée","duree",58],["Enfants","nb",50],["Enfants absents","absents",W-2*M-480]];
-  const pages = []; let ops = []; let y;
+  const pages = []; let ops = []; let y; let hc = cols;
   const T = (x, yy, t, size = 9, bold = false) => ops.push(`BT /${bold?"F2":"F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET`);
   const line = (x1, y1, x2, y2, g = .8) => ops.push(`${g} G 0.5 w ${x1} ${y1.toFixed(1)} m ${x2} ${y2.toFixed(1)} l S`);
   const header = () => {
     ops.push(`0.95 0.92 0.84 rg ${M} ${(y-16).toFixed(1)} ${W-2*M} 20 re f 0 g`);
-    let x = M + 4; cols.forEach(([l,,w]) => { T(x, y-10, l, 8.5, true); x += w; });
+    let x = M + 4; hc.forEach(([l,,w]) => { T(x, y-10, l, 8.5, true); x += w; });
     y -= 22;
   };
   const newPage = first => {
@@ -1495,7 +1511,7 @@ function makePdf(){
       meta.forEach(t => { T(M, y, t, 10); y -= 14; });
       T(M, y, `${m.n} tournée${m.n>1?"s":""} — durée totale : ${durTxt(m.tot)}`, 10, true); y -= 20;
     } else { T(M, y-8, "Relevé des tournées — " + repPeriode() + " (suite)", 9, true); y -= 20; }
-    header();
+    if (hc) header();
   };
   newPage(true);
   rows.forEach((r, i) => {
@@ -1509,6 +1525,24 @@ function makePdf(){
   });
   y -= 10; if (y < M + 30) newPage(false);
   T(M, y, `Total : ${m.n} tournée${m.n>1?"s":""} — ${durTxt(m.tot)}`, 11, true);
+  const fu = repPleins();
+  if (fu.length){
+    const ft = crepTot(fu); y -= 30;
+    if (y < M + 90){ hc = null; newPage(false); }
+    T(M, y, "Carburant", 14, true); y -= 16;
+    T(M, y, `${ft.n} plein${ft.n>1?"s":""} — ${fmtN(ft.l, 2)} litres — total ${eur(ft.m)}`, 10, true); y -= 8;
+    hc = FUEL_COLS_PDF; header();
+    crepRows(fu).forEach((r, i) => {
+      const wr = hc.map(([,k,w]) => wrap(r[k], w - 8, 9));
+      const h = Math.max(...wr.map(l => l.length)) * 11 + 7;
+      if (y - h < M + 30) newPage(false);
+      if (i % 2) ops.push(`0.98 0.97 0.95 rg ${M} ${(y-h+4).toFixed(1)} ${W-2*M} ${h} re f 0 g`);
+      let x = M + 4; wr.forEach((ls, c) => { ls.forEach((t, j) => T(x, y - 8 - j*11, t, 9, c === 0 || c === 7)); x += hc[c][2]; });
+      y -= h; line(M, y+4, W-M, y+4);
+    });
+    y -= 10; if (y < M + 30){ hc = null; newPage(false); }
+    T(M, y, `Total carburant : ${fmtN(ft.l, 2)} L — ${eur(ft.m)}`, 11, true);
+  }
   pages.push(ops);
   // assemblage du fichier
   const objs = []; const add = o => { objs.push(o); return objs.length; };
@@ -1545,7 +1579,10 @@ function makePng(){
   const layout = rows.map(r => { const w = cols.map(([,k,cw]) => wrapC(r[k], cw-12, 14)); return { w, h: Math.max(...w.map(l => l.length)) * 19 + 12 }; });
   const meta = []; if (S.chauffeur) meta.push("Chauffeur : " + S.chauffeur); if (m.rempl.length) meta.push("Remplacement de : " + m.rempl.join(", ")); if (m.resp.length) meta.push("Responsable : " + m.resp.join(", "));
   const top = M + 40 + 26 + meta.length * 22 + 30;
-  const H2 = top + 34 + layout.reduce((a,l) => a + l.h, 0) + 70;
+  const fu = repPleins(); const ft = crepTot(fu);
+  const flay = crepRows(fu).map(r => { const w = FUEL_COLS_PNG.map(([,k,cw]) => wrapC(r[k], cw-12, 14)); return { w, h: Math.max(...w.map(l => l.length)) * 19 + 12 }; });
+  const fuelH = fu.length ? 50 + 26 + 34 + flay.reduce((a,l) => a + l.h, 0) + 40 : 0;
+  const H2 = top + 34 + layout.reduce((a,l) => a + l.h, 0) + 70 + fuelH;
   cv.width = W * S2; cv.height = H2 * S2; ctx.scale(S2, S2);
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H2);
   ctx.fillStyle = "#1f2a2e"; ctx.textBaseline = "top";
@@ -1563,6 +1600,19 @@ function makePng(){
     y += l.h; ctx.fillStyle = "#e4e0d6"; ctx.fillRect(M, y - 1, W - 2*M, 1);
   });
   ctx.fillStyle = "#1f2a2e"; ctx.font = F(16, true); ctx.fillText(`Total : ${m.n} tournée${m.n>1?"s":""} — ${durTxt(m.tot)}`, M, y + 16);
+  if (fu.length){
+    y += 56; ctx.font = F(22, true); ctx.fillText("Carburant", M, y); y += 30;
+    ctx.font = F(15, true); ctx.fillText(`${ft.n} plein${ft.n>1?"s":""} — ${fmtN(ft.l, 2)} litres — total ${eur(ft.m)}`, M, y); y += 26;
+    ctx.fillStyle = "#f2ead6"; ctx.fillRect(M, y, W - 2*M, 32); ctx.fillStyle = "#1f2a2e"; ctx.font = F(14, true);
+    let fx = M + 8; FUEL_COLS_PNG.forEach(([l,,w]) => { ctx.fillText(l, fx, y + 8); fx += w; }); y += 34;
+    flay.forEach((l, i) => {
+      if (i % 2){ ctx.fillStyle = "#faf8f3"; ctx.fillRect(M, y, W - 2*M, l.h); }
+      ctx.fillStyle = "#1f2a2e"; let xx = M + 8;
+      l.w.forEach((ls, c) => { ctx.font = F(14, c === 0 || c === 7); ls.forEach((t, j) => ctx.fillText(t, xx, y + 7 + j * 19)); xx += FUEL_COLS_PNG[c][2]; });
+      y += l.h; ctx.fillStyle = "#e4e0d6"; ctx.fillRect(M, y - 1, W - 2*M, 1);
+    });
+    ctx.fillStyle = "#1f2a2e"; ctx.font = F(16, true); ctx.fillText(`Total carburant : ${fmtN(ft.l, 2)} L — ${eur(ft.m)}`, M, y + 16);
+  }
   ctx.fillStyle = "#6b7478"; ctx.font = F(12); ctx.fillText(`Édité le ${dFr(dayKey(new Date()))} avec Ma tournée scolaire`, M, y + 44);
   return new Promise(res => cv.toBlob(b => res(b), "image/png"));
 }
