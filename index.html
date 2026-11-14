@@ -648,6 +648,60 @@ function startRun(){
   sub = null; save(); render(); window.scrollTo(0,0); keepAwake();
   toast("Tournée lancée à " + hm(S.active.start));
 }
+/* ---------- 🔍 Tester une tournée à une date (aperçu, ne lance rien, n'enregistre rien) ---------- */
+let sim = null;
+function simSheet(){
+  const t = tour(sim.id); if (!t){ closeSheet(); return; }
+  const dk = sim.date, sens = sim.sens;
+  const sensOpts = [["matin","☀️ Matin"], ...(t.midiOn && t.etabs.length > 1 ? [["midi","🕛 Midi"]] : []), ["soir","🌙 Soir"]];
+  let h = `<h2>🔍 Tester « ${esc(t.nom)} »</h2>
+    <p class="small muted" style="margin-top:0">Aperçu de ce que l'application préparera ce jour-là. Rien n'est lancé ni enregistré.</p>
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="sim_date" value="${dk}"></div>
+      <div class="grow"><label class="f">Trajet</label><select class="t" id="sim_sens">${sensOpts.map(([v,l]) => `<option value="${v}" ${v === sens ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+    <h3 style="margin:14px 0 6px">${sensIcon(sens)} ${esc(dateLong(dk).replace(/^./, c => c.toUpperCase()))}</h3>`;
+  const warn = m => `<div class="card small" style="padding:8px 12px;border-color:var(--warn);background:#fff6ee">${m}</div>`;
+  if (t.pause) h += warn("⏸ Cette tournée est en pause : elle n'apparaît pas dans les tournées à lancer.");
+  if (t.dateUnique && t.dateUnique !== dk) h += warn(`📅 Tournée ponctuelle prévue le ${dateLong(t.dateUnique)} seulement : ce jour-là, l'application demanderait confirmation avant de la lancer.`);
+  // établissements et horaires du jour
+  h += `<div class="card" style="padding:10px 12px">` + t.etabs.map(e => {
+    const ho = horaire(e, dk + "T12:00:00"), has = hasHoraires(e);
+    const txt = !has ? "horaires non renseignés" : (ho.debut || ho.fin) ? `${hTxt(ho.debut) || "?"} – ${hTxt(ho.fin) || "?"}` : "⚠️ fermé ce jour-là (aucun horaire)";
+    return `<div class="small">🏫 <b>${esc(e.nom || "Établissement")}</b> : ${txt}</div>`;
+  }).join("");
+  if (!t.dateUnique && !isSchoolDay(t, dk)) h += `<div class="small" style="color:var(--warn);font-weight:800;margin-top:4px">⚠️ Pas un jour de classe d'après les horaires : l'application ne proposerait pas cette tournée ce jour-là.</div>`;
+  if (remplActif(t, dk)) h += `<div class="small" style="margin-top:4px">🔁 Remplacement de ${esc(t.remplacement.nom)} actif ce jour-là</div>`;
+  else if (t.remplacement?.actif && t.remplacement.nom) h += `<div class="small muted" style="margin-top:4px">🔁 Remplacement de ${esc(t.remplacement.nom)} : pas actif à cette date</div>`;
+  // heures
+  if (sens === "matin"){ const hm1 = defaultHeure(t, "matin", dk); h += `<div class="small" style="margin-top:4px">⏰ Premier ramassage : <b>${hTxt(hm1)}</b></div>`; }
+  if (sens === "soir"){ const pk = defaultHeure(t, "soir", dk), am = approachMins(t); h += `<div class="small" style="margin-top:4px">⏰ Récupération à l'établissement : <b>${hTxt(pk)}</b> · départ de chez vous vers <b>${hTxt(minusMin(pk, am))}</b> (trajet estimé ${am} min)</div>`; }
+  h += `</div>`;
+  // enfants
+  const all = eligible(t, sens);
+  const abs = all.filter(k => absentPrevu(k, dk, sens)), pres = all.filter(k => !absentPrevu(k, dk, sens));
+  const hors = t.enfants.filter(k => !all.includes(k));
+  const kidLine = (k, n) => { const ek = sens === "midi" ? k : effKid(k, dk, sens); const com = sens === "matin" ? k.comMatin : sens === "soir" ? k.comSoir : "";
+    return `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><span class="num">${n}</span><b class="grow">${esc(kidName(k))}</b>${sens === "matin" && ek.heureMatin ? `<span class="pill m">${hTxt(ek.heureMatin)}</span>` : ""}</div>
+      <div class="addr">📍 ${esc(ek.adresse || "Adresse manquante")}${ek.altLabel ? ` <span class="pill" style="background:#e6f0ff;color:var(--call)">🏠 ${esc(ek.altLabel)}</span>` : ""}</div>
+      ${t.etabs.length > 1 ? `<div class="small muted">🏫 ${esc(kidEtab(t, k).nom || "Établissement")}</div>` : ""}${com ? `<div class="small muted">💬 ${esc(com)}</div>` : ""}</div>`; };
+  const etabLine = (e, kids) => `<div class="card" style="padding:8px 12px;margin:6px 0;background:#f4f1ea"><b>🏫 ${esc(e.nom || "Établissement")}</b> <span class="small muted">${sens === "soir" ? "récupérer" : "déposer"} : ${esc(kids.map(k => k.prenom).join(", "))}</span></div>`;
+  h += `<h3 style="margin:14px 0 4px">Étapes prévues</h3>`;
+  if (!pres.length) h += `<p class="small muted">Aucun enfant à transporter sur ce trajet ce jour-là.</p>`;
+  else if (sens === "midi"){
+    pres.forEach((k, i) => { const d = midiDestOf(t, k); h += `<div class="card" style="padding:8px 12px;margin:6px 0"><span class="num">${i+1}</span> <b>${esc(kidName(k))}</b><div class="small">🏫 ${esc(kidEtab(t, k).nom || "Établissement")} → ${d.adr ? "📍 " + esc(k.midiLib || k.midiAdr) : "🏫 " + esc(d.etab.nom || "Établissement")}</div></div>`; });
+  } else {
+    const groups = t.etabs.map(e => ({ e, kids: pres.filter(k => kidEtab(t, k).id === e.id) })).filter(g => g.kids.length);
+    let n = 0;
+    if (sens === "soir") groups.slice().reverse().forEach(g => { h += etabLine(g.e, g.kids); });
+    pres.forEach(k => { h += kidLine(k, ++n); });
+    if (sens === "matin") groups.forEach(g => { h += etabLine(g.e, g.kids); });
+    if (S.domicile) h += `<div class="small muted" style="margin:6px 2px">🏠 Puis retour à la maison</div>`;
+  }
+  if (abs.length) h += `<h3 style="margin:14px 0 4px">📅 Absences prévues ce jour-là</h3>` + abs.map(k => { const a = absentPrevu(k, dk, sens); return `<div class="small" style="margin:4px 2px">• <b>${esc(kidName(k))}</b> — décoché(e) automatiquement${a.motif ? " (" + esc(a.motif) + ")" : ""}</div>`; }).join("");
+  if (hors.length) h += `<h3 style="margin:14px 0 4px">Pas sur ce trajet</h3><p class="small muted" style="margin:0">${esc(hors.map(kidName).join(", "))}</p>`;
+  h += `<div class="row" style="margin-top:14px"><button class="btn grow" data-act="simDay" data-id="-1">◀ Jour précédent</button><button class="btn grow" data-act="simDay" data-id="1">Jour suivant ▶</button></div>
+    <button class="btn w100" style="margin-top:8px" data-act="close">Fermer</button>`;
+  openSheet(h);
+}
 function etabRef(a, e){ if (a.sens === "midi") return ""; const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
 function sensIcon(x){ return x === "matin" ? "☀️" : x === "midi" ? "🕛" : "🌙"; }
 function sensNom(x){ return x === "matin" ? "matin" : x === "midi" ? "midi" : "soir"; }
@@ -1065,7 +1119,8 @@ function renderHome(){
         <button class="btn brand grow" data-act="prep" data-id="${t.id}" data-sens="matin" ${nm?"":"disabled"}>☀️ Lancer le matin</button>
         ${t.midiOn && t.etabs.length > 1 ? `<button class="btn grow" style="background:#e3f3ec;border-color:#bfe3d2" data-act="prep" data-id="${t.id}" data-sens="midi" ${t.enfants.some(k => k.midi === true)?"":"disabled"}>🕛 Lancer le midi</button>` : ""}
         <button class="btn night grow" data-act="prep" data-id="${t.id}" data-sens="soir" ${ns?"":"disabled"}>🌙 Lancer le soir</button>
-      </div></div>`;
+      </div>
+      <button class="btn sm" style="margin-top:8px" data-act="simOpen" data-id="${t.id}">🔍 Tester à une date</button></div>`;
   });
   const paused = S.tournees.filter(t => t.pause);
   if (!S.tournees.some(t => !t.pause)) h += `<div class="card empty muted">Toutes vos tournées sont en pause.</div>`;
@@ -2660,6 +2715,8 @@ document.addEventListener("click", e => {
     case "finishArr": closeSheet(); finishRun(); break;
     case "msgs": msgsSheet(i); break;
     case "finish": finishRun(); break;
+    case "simOpen": { const t = tour(id); sim = { id, date: t.dateUnique || nextSchoolDay(t, addDays(dayKey(new Date()), -1)), sens: "matin" }; simSheet(); break; }
+    case "simDay": sim.date = addDays(sim.date, Number(id)); simSheet(); break;
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
     case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
@@ -2771,6 +2828,8 @@ document.addEventListener("change", e => {
     saveHist(mk); render(); toast("Horaire corrigé"); return;
   }
   if (t.id === "k_heure"){ const a = document.getElementById("alt_heure"); if (a && (!a.value || a.value === a.dataset.gen)) a.value = t.value; if (a) a.dataset.gen = t.value; return; }
+  if (t.id === "sim_date" && t.value){ sim.date = t.value; simSheet(); return; }
+  if (t.id === "sim_sens"){ sim.sens = t.value; simSheet(); return; }
   if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
   if (t.id === "carbuMonth"){ carbuMonth = t.value; render(); return; }
   if (t.id === "crep_month"){ crep.month = t.value; carbuReportSheet(); return; }
