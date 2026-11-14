@@ -1,5 +1,5 @@
 // Ma tournée — service minimal : il ne fait RIEN en arrière-plan.
-// Il sert uniquement quand vous touchez la notification « Revenir à l'étape » :
+// Il sert uniquement quand vous touchez la notification « Revenir à l'application » :
 // il remet l'application au premier plan (sans la recharger). Aucune position, aucune donnée envoyée.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));

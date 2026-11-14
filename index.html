@@ -2100,8 +2100,8 @@ async function showNavNotif(dest){
   try {
     const reg = swReg || await navigator.serviceWorker.ready;
     await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
-      body: "Touchez ici pour revenir à l'étape dans Ma tournée", tag: "tournee-nav", renotify: false, requireInteraction: true, silent: true,
-      icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "retour", title: "↩ Revenir à l'étape" }] });
+      body: "Touchez ici pour revenir à l'application", tag: "tournee-nav", renotify: false, requireInteraction: true, silent: true,
+      icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "retour", title: "↩ Revenir à l'application" }] });
   } catch(e){}
 }
 async function closeNavNotif(){ try { const reg = swReg || (notifSupported() && await navigator.serviceWorker.getRegistration()); if (reg) (await reg.getNotifications({ tag: "tournee-nav" })).forEach(n => n.close()); } catch(e){} }
@@ -2113,13 +2113,13 @@ document.addEventListener("click", e => {
 document.addEventListener("visibilitychange", () => { if (!document.hidden) closeNavNotif(); });
 function notifBanner(){
   if (S.navNotif === false || notifPerm() !== "default") return "";
-  return `<div class="card small" style="border-color:var(--brand)">🔔 <b>Revenir à l'étape d'un geste</b> pendant le guidage : autorisez les notifications. Une notification « Revenir à l'étape » s'affichera quand vous lancez Google Maps.
+  return `<div class="card small" style="border-color:var(--brand)">🔔 <b>Revenir à l'application d'un geste</b> pendant le guidage : autorisez les notifications. Une notification « Revenir à l'application » s'affichera quand vous lancez Google Maps.
     <button class="btn sm go" style="margin-top:6px" data-act="notifAsk">Autoriser les notifications</button></div>`;
 }
 function notifReglage(){
   const p = notifPerm();
   const st = p === "granted" ? "✓ Notifications autorisées" : p === "denied" ? "⚠ Notifications bloquées : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → Autoriser" : p === "default" ? `<button class="btn sm go" data-act="notifAsk">Autoriser les notifications</button>` : "Non disponible sur cet appareil";
-  return `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="navNotif" ${S.navNotif === false ? "" : "checked"} style="width:22px;height:22px"> 🔔 Notification « Revenir à l'étape » quand je lance la navigation</label>
+  return `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="navNotif" ${S.navNotif === false ? "" : "checked"} style="width:22px;height:22px"> 🔔 Notification « Revenir à l'application » quand je lance la navigation</label>
     <p class="small muted" style="margin:4px 0 0 30px">Utile avec Android Auto : le guidage reste sur l'écran de la voiture, et un appui sur la notification ramène l'application sur l'étape en cours. Décochez si vous n'en avez pas besoin.</p>
     <div class="small" style="margin:6px 0 0 30px">${st}</div>`;
 }
