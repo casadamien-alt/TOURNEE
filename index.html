@@ -2101,7 +2101,7 @@ async function showNavNotif(dest){
   try {
     const reg = swReg || await navigator.serviceWorker.ready;
     await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
-      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: false, requireInteraction: true, vibrate: [120, 60, 120],
+      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: true, timestamp: Date.now(), requireInteraction: true, vibrate: [120, 60, 120],
       icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
   } catch(e){}
 }
@@ -2109,7 +2109,7 @@ async function closeNavNotif(){ try { const reg = swReg || (notifSupported() && 
 document.addEventListener("click", e => {
   const a = e.target.closest && e.target.closest('a[href^="https://www.google.com/maps/dir"]'); if (!a) return;
   const m = a.textContent.match(/(?:navigation vers|Naviguer vers|Y aller)\s*(.*)$/); const dest = m && m[1] ? m[1].trim() : "";
-  showNavNotif(dest);   // affichée tout de suite : la page peut être mise en pause dès que Maps passe devant
+  setTimeout(() => showNavNotif(dest), 2000);   // 2 s : Maps est passé devant, Android affiche alors la fenêtre en haut de l'écran
 }, true);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) closeNavNotif(); });
 async function testNotif(){
@@ -2119,8 +2119,10 @@ async function testNotif(){
   if (Notification.permission === "default"){ const r = await Notification.requestPermission(); if (r !== "granted") return out("❌ Vous n'avez pas autorisé les notifications."); }
   if (Notification.permission === "denied") return out("❌ Notifications bloquées pour ce site. Dans Chrome : ⋮ → Paramètres → Paramètres des sites → Notifications → autorisez casadamien-alt.github.io. Vérifiez aussi : Réglages du téléphone → Applications → Chrome → Notifications → activées.");
   let reg = swReg; try { reg = reg || await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register("sw.js"); } catch(e){ return out("❌ Le service de notification ne démarre pas : " + esc(e.message || String(e))); }
+  out("⏳ Quittez l'application maintenant (bouton d'accueil ou ouvrez Google Maps) : la notification arrive dans 5 secondes.");
+  await new Promise(r => setTimeout(r, 5000));
   try {
-    await reg.showNotification("🔔 Test — Ma tournée", { body: "Revenir à l'application ?", tag: "tournee-test", vibrate: [120, 60, 120], icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
+    await reg.showNotification("🔔 Test — Ma tournée", { body: "Revenir à l'application ?", tag: "tournee-test", renotify: true, timestamp: Date.now(), vibrate: [120, 60, 120], icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
     out("✓ Notification envoyée. Si vous ne la voyez pas en haut de l'écran ni dans le volet : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → activez-les, y compris la catégorie « Sites ».");
   } catch(e){ out("❌ Android a refusé la notification : " + esc(e.message || String(e))); }
 }
