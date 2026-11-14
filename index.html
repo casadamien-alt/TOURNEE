@@ -1120,7 +1120,7 @@ function renderHome(){
         ${t.midiOn && t.etabs.length > 1 ? `<button class="btn grow" style="background:#e3f3ec;border-color:#bfe3d2" data-act="prep" data-id="${t.id}" data-sens="midi" ${t.enfants.some(k => k.midi === true)?"":"disabled"}>🕛 Lancer le midi</button>` : ""}
         <button class="btn night grow" data-act="prep" data-id="${t.id}" data-sens="soir" ${ns?"":"disabled"}>🌙 Lancer le soir</button>
       </div>
-      <button class="btn sm" style="margin-top:8px" data-act="simOpen" data-id="${t.id}">🔍 Tester à une date</button></div>`;
+      <div style="text-align:right;margin-top:18px"><a href="#" class="small muted" style="text-decoration:underline;padding:4px 2px" data-act="simOpen" data-id="${t.id}">🔍 tester à une date</a></div></div>`;
   });
   const paused = S.tournees.filter(t => t.pause);
   if (!S.tournees.some(t => !t.pause)) h += `<div class="card empty muted">Toutes vos tournées sont en pause.</div>`;
@@ -2715,7 +2715,7 @@ document.addEventListener("click", e => {
     case "finishArr": closeSheet(); finishRun(); break;
     case "msgs": msgsSheet(i); break;
     case "finish": finishRun(); break;
-    case "simOpen": { const t = tour(id); sim = { id, date: t.dateUnique || nextSchoolDay(t, addDays(dayKey(new Date()), -1)), sens: "matin" }; simSheet(); break; }
+    case "simOpen": { e.preventDefault(); const t = tour(id); sim = { id, date: t.dateUnique || nextSchoolDay(t, addDays(dayKey(new Date()), -1)), sens: "matin" }; simSheet(); break; }
     case "simDay": sim.date = addDays(sim.date, Number(id)); simSheet(); break;
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
     case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
