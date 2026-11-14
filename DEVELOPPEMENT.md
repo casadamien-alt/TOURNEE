@@ -5,7 +5,6 @@ Application web d'un chauffeur de transport scolaire (remplacements). Utilisée 
 ## Où est quoi
 - `index.html` : **toute l'application** (HTML + CSS + JS dans un seul fichier, sans dépendance ni étape de construction). C'est le fichier à modifier.
 - `manifest.json`, `icon-*.png` : installation sur l'écran d'accueil (PWA).
-- `sw.js` : service minimal, utilisé seulement quand on touche la notification « Revenir à l'application » (aucun travail en arrière-plan, aucune donnée envoyée).
 - `apps-script.gs` : le « serveur ». C'est un programme Google Apps Script déployé en application web par l'utilisateur sur son compte. Il stocke les données dans un fichier JSON de son Google Drive, `ma-tournee-donnees.json`, et protège l'accès par un code secret (`CODE_SECRET`). Il sert aussi à créer les événements Google Agenda et à ranger les photos de reçus de carburant (dossier « Ma tournée – reçus »).
 - Site publié par GitHub Pages depuis la branche `main` : https://casadamien-alt.github.io/TOURNEE/
 

@@ -721,7 +721,7 @@ function validateStep(i, fromVoice){
 }
 let focusKidStep = null;
 let lastEntry = null;
-function finishRun(){ closeNavNotif();
+function finishRun(){
   const a = S.active; if (!a) return;
   const end = new Date().toISOString();
   const entry = {
@@ -1161,7 +1161,7 @@ function renderRun(){
   const remaining = a.steps.filter(s => !s.at).map(s => s.type === "kid" ? nav(s.kid) : nav(SE(s, a)));
   if (S.domicile) remaining.push(S.domicile);   // l'itinéraire se termine à la maison
   const links = mapsLinks(remaining);
-  let h = (STANDALONE ? notifBanner() : "") + `<div class="timer">
+  let h = `<div class="timer">
     <div><span class="small muted">Départ</span><b>${hm(a.start)}</b></div>
     <div><span class="small muted">Durée</span><b id="elapsed">${durTxt(minsBetween(a.start, new Date()))}</b></div>
     <div><span class="small muted">Étapes</span><b>${a.steps.filter(s=>s.at).length}/${a.steps.length}</b></div></div>`;
@@ -2083,70 +2083,14 @@ function renderHist(){
   return h;
 }
 
-/* ---------- Notification « Revenir à l'étape » pendant le guidage ----------
-   Une page web ne peut pas revenir seule au premier plan : on affiche une notification au lancement de Google Maps.
-   La toucher remet l'application devant, sans rechargement. Elle disparaît dès que vous revenez dans l'application. */
-let swReg = null;
-const notifSupported = () => "Notification" in window && "serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost");
-if (notifSupported()) navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(() => {});
-const notifPerm = () => notifSupported() ? Notification.permission : "indisponible";
-async function askNotif(){
-  if (!notifSupported()) return toast("Notifications non disponibles ici");
-  const r = await Notification.requestPermission();
-  toast(r === "granted" ? "Notifications autorisées ✓" : "Notifications refusées");
-  render();
-}
-async function showNavNotif(dest){
-  if (S.navNotif === false || notifPerm() !== "granted" || !S.active || !document.hidden) return;   // inutile si vous êtes déjà revenu
-  try {
-    const reg = swReg || await navigator.serviceWorker.ready;
-    await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
-      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: true, timestamp: Date.now(), requireInteraction: true, vibrate: [120, 60, 120],
-      icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
-  } catch(e){}
-}
-async function closeNavNotif(){ try { const reg = swReg || (notifSupported() && await navigator.serviceWorker.getRegistration()); if (reg) (await reg.getNotifications({ tag: "tournee-nav" })).forEach(n => n.close()); } catch(e){} }
-document.addEventListener("click", e => {
-  const a = e.target.closest && e.target.closest('a[href^="https://www.google.com/maps/dir"]'); if (!a) return;
-  const m = a.textContent.match(/(?:navigation vers|Naviguer vers|Y aller)\s*(.*)$/); const dest = m && m[1] ? m[1].trim() : "";
-  setTimeout(() => showNavNotif(dest), 2000);   // 2 s : Maps est passé devant, Android affiche alors la fenêtre en haut de l'écran
-}, true);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) closeNavNotif(); });
-async function testNotif(){
-  const out = m => { const el = document.getElementById("notifDiag"); if (el) el.innerHTML = m; };
-  if (!("Notification" in window)) return out("❌ Ce navigateur ne gère pas les notifications.");
-  if (!("serviceWorker" in navigator)) return out("❌ Service de notification indisponible dans ce navigateur.");
-  if (Notification.permission === "default"){ const r = await Notification.requestPermission(); if (r !== "granted") return out("❌ Vous n'avez pas autorisé les notifications."); }
-  if (Notification.permission === "denied") return out("❌ Notifications bloquées pour ce site. Dans Chrome : ⋮ → Paramètres → Paramètres des sites → Notifications → autorisez casadamien-alt.github.io. Vérifiez aussi : Réglages du téléphone → Applications → Chrome → Notifications → activées.");
-  let reg = swReg; try { reg = reg || await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register("sw.js"); } catch(e){ return out("❌ Le service de notification ne démarre pas : " + esc(e.message || String(e))); }
-  out("⏳ Quittez l'application maintenant (bouton d'accueil ou ouvrez Google Maps) : la notification arrive dans 5 secondes.");
-  await new Promise(r => setTimeout(r, 5000));
-  try {
-    await reg.showNotification("🔔 Test — Ma tournée", { body: "Revenir à l'application ?", tag: "tournee-test", renotify: true, timestamp: Date.now(), vibrate: [120, 60, 120], icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
-    out("✓ Notification envoyée. Si vous ne la voyez pas en haut de l'écran ni dans le volet : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → activez-les, y compris la catégorie « Sites ».");
-  } catch(e){ out("❌ Android a refusé la notification : " + esc(e.message || String(e))); }
-}
-function notifBanner(){
-  if (S.navNotif === false || notifPerm() !== "default") return "";
-  return `<div class="card small" style="border-color:var(--brand)">🔔 <b>Revenir à l'application d'un geste</b> pendant le guidage : autorisez les notifications. Une notification « Revenir à l'application » s'affichera quand vous lancez Google Maps.
-    <button class="btn sm go" style="margin-top:6px" data-act="notifAsk">Autoriser les notifications</button></div>`;
-}
-function notifReglage(){
-  const p = notifPerm();
-  const st = p === "granted" ? "✓ Notifications autorisées" : p === "denied" ? "⚠ Notifications bloquées : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → Autoriser" : p === "default" ? `<button class="btn sm go" data-act="notifAsk">Autoriser les notifications</button>` : "Non disponible sur cet appareil";
-  return `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="navNotif" ${S.navNotif === false ? "" : "checked"} style="width:22px;height:22px"> 🔔 Notification « Revenir à l'application » quand je lance la navigation</label>
-    <p class="small muted" style="margin:4px 0 0 30px">Utile avec Android Auto : le guidage reste sur l'écran de la voiture, et un appui sur la notification ramène l'application sur l'étape en cours. Décochez si vous n'en avez pas besoin.</p>
-    <div class="small" style="margin:6px 0 0 30px">${st}</div>
-    <button class="btn sm" style="margin:8px 0 0 30px" data-act="notifTest">🔔 Tester la notification</button>
-    <div id="notifDiag" class="small" style="margin:6px 0 0 30px"></div>`;
-}
+// ancienne notification « Revenir à l'application » retirée : on désinstalle son petit service s'il est encore sur le téléphone
+if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
 
 /* ---------- Réglages ---------- */
 function renderReglages(){
   return `<div class="card"><h3>👤 Vous</h3><label class="f">Votre prénom (signature des messages)</label><input class="t" data-set="chauffeur" value="${esc(S.chauffeur)}" placeholder="ex. Damien">
     ${STANDALONE ? `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="gpsArrivee" ${S.gpsArrivee === false ? "" : "checked"} style="width:22px;height:22px"> 📍 Détecter mon arrivée à chaque étape (GPS) : vibration + « Arrivé ? Valider »</label>` : ""}
     <label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="autoNav" ${S.autoNav === false ? "" : "checked"} style="width:22px;height:22px"> 🧭 Lancer la navigation vers l'étape suivante à chaque validation</label>
-    ${STANDALONE ? notifReglage() : ""}
     <label class="f">🏠 Mon domicile : fin de chaque tournée (matin et soir)</label>${addrField('data-set="domicile"', S.domicile || "", "Votre adresse, code postal, ville")}</div>
   <div class="card"><h3>💬 Modèles de messages</h3>
     <p class="small muted" style="margin:0">Remplacés automatiquement : <b>{enfant}</b>, <b>{heure}</b>, <b>{chauffeur}</b></p>
@@ -2716,8 +2660,6 @@ document.addEventListener("click", e => {
     case "finishArr": closeSheet(); finishRun(); break;
     case "msgs": msgsSheet(i); break;
     case "finish": finishRun(); break;
-    case "notifAsk": askNotif(); break;
-    case "notifTest": testNotif(); break;
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
     case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
@@ -2864,7 +2806,7 @@ document.addEventListener("change", e => {
     o[path[path.length-1]] = val;
     save(); if (t.type === "checkbox" || t.dataset.tf === "dateUnique") render(); return;
   }
-  if (t.dataset.setb){ S[t.dataset.setb] = t.checked; save(); toast(t.checked ? "Activé" : "Désactivé"); if (t.dataset.setb === "navNotif"){ if (t.checked && notifPerm() === "default") askNotif(); else render(); } return; }
+  if (t.dataset.setb){ S[t.dataset.setb] = t.checked; save(); toast(t.checked ? "Activé" : "Désactivé"); return; }
   if (t.dataset.set){ S[t.dataset.set] = t.value.trim(); save(); toast("Enregistré ✓"); if (t.dataset.set === "domicile") render(); return; }
   if (t.dataset.tpl){ S.tpl[t.dataset.tpl] = t.value; save(); toast("Enregistré ✓"); return; }
 });
