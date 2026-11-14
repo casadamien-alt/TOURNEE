@@ -2100,8 +2100,8 @@ async function showNavNotif(dest){
   try {
     const reg = swReg || await navigator.serviceWorker.ready;
     await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
-      body: "Touchez ici pour revenir à l'application", tag: "tournee-nav", renotify: false, requireInteraction: true, silent: true,
-      icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "retour", title: "↩ Revenir à l'application" }] });
+      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: false, requireInteraction: true, silent: true,
+      icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
   } catch(e){}
 }
 async function closeNavNotif(){ try { const reg = swReg || (notifSupported() && await navigator.serviceWorker.getRegistration()); if (reg) (await reg.getNotifications({ tag: "tournee-nav" })).forEach(n => n.close()); } catch(e){} }
