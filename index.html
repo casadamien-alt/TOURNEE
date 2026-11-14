@@ -696,6 +696,17 @@ function simSheet(){
     if (sens === "matin") groups.forEach(g => { h += etabLine(g.e, g.kids); });
     if (S.domicile) h += `<div class="small muted" style="margin:6px 2px">🏠 Puis retour à la maison</div>`;
   }
+  // première étape : bouton pour voir le temps de trajet dans Google Maps (aperçu, le guidage ne démarre pas)
+  let first = null;
+  if (pres.length){
+    if (sens === "matin"){ const ek = effKid(pres[0], dk, "matin"); first = { nom: kidName(pres[0]), adr: nav(ek) }; }
+    else { const g = t.etabs.map(e => ({ e, n: pres.filter(k => kidEtab(t, k).id === e.id).length })).filter(x => x.n); const e = sens === "soir" ? g[g.length - 1]?.e : kidEtab(t, pres[0]); if (e) first = { nom: e.nom || "Établissement", adr: nav(e) }; }
+  }
+  if (first && first.adr){
+    const q = new URLSearchParams({ api: "1", travelmode: "driving", destination: first.adr }); if (S.domicile) q.set("origin", S.domicile);
+    h += `<a class="btn w100" style="margin-top:10px" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?${q.toString()}">🗺️ Temps de trajet jusqu'à la 1re étape<span class="small" style="display:block;font-weight:700;opacity:.8;margin-top:2px">${esc(first.nom)} — depuis ${S.domicile ? "chez vous" : "votre position actuelle"}</span></a>
+      <p class="small muted" style="margin:4px 2px 0">Google Maps affiche le trajet et sa durée, sans lancer le guidage. La durée correspond à la circulation du moment.</p>`;
+  }
   if (abs.length) h += `<h3 style="margin:14px 0 4px">📅 Absences prévues ce jour-là</h3>` + abs.map(k => { const a = absentPrevu(k, dk, sens); return `<div class="small" style="margin:4px 2px">• <b>${esc(kidName(k))}</b> — décoché(e) automatiquement${a.motif ? " (" + esc(a.motif) + ")" : ""}</div>`; }).join("");
   if (hors.length) h += `<h3 style="margin:14px 0 4px">Pas sur ce trajet</h3><p class="small muted" style="margin:0">${esc(hors.map(kidName).join(", "))}</p>`;
   h += `<div class="row" style="margin-top:14px"><button class="btn grow" data-act="simDay" data-id="-1">◀ Jour précédent</button><button class="btn grow" data-act="simDay" data-id="1">Jour suivant ▶</button></div>
