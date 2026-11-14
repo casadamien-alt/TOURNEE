@@ -2097,7 +2097,7 @@ async function askNotif(){
   render();
 }
 async function showNavNotif(dest){
-  if (S.navNotif === false || notifPerm() !== "granted" || !S.active) return;
+  if (S.navNotif === false || notifPerm() !== "granted" || !S.active || !document.hidden) return;   // inutile si vous êtes déjà revenu
   try {
     const reg = swReg || await navigator.serviceWorker.ready;
     await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
