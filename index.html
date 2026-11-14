@@ -2112,6 +2112,18 @@ document.addEventListener("click", e => {
   showNavNotif(dest);   // affichée tout de suite : la page peut être mise en pause dès que Maps passe devant
 }, true);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) closeNavNotif(); });
+async function testNotif(){
+  const out = m => { const el = document.getElementById("notifDiag"); if (el) el.innerHTML = m; };
+  if (!("Notification" in window)) return out("❌ Ce navigateur ne gère pas les notifications.");
+  if (!("serviceWorker" in navigator)) return out("❌ Service de notification indisponible dans ce navigateur.");
+  if (Notification.permission === "default"){ const r = await Notification.requestPermission(); if (r !== "granted") return out("❌ Vous n'avez pas autorisé les notifications."); }
+  if (Notification.permission === "denied") return out("❌ Notifications bloquées pour ce site. Dans Chrome : ⋮ → Paramètres → Paramètres des sites → Notifications → autorisez casadamien-alt.github.io. Vérifiez aussi : Réglages du téléphone → Applications → Chrome → Notifications → activées.");
+  let reg = swReg; try { reg = reg || await navigator.serviceWorker.getRegistration() || await navigator.serviceWorker.register("sw.js"); } catch(e){ return out("❌ Le service de notification ne démarre pas : " + esc(e.message || String(e))); }
+  try {
+    await reg.showNotification("🔔 Test — Ma tournée", { body: "Revenir à l'application ?", tag: "tournee-test", vibrate: [120, 60, 120], icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
+    out("✓ Notification envoyée. Si vous ne la voyez pas en haut de l'écran ni dans le volet : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → activez-les, y compris la catégorie « Sites ».");
+  } catch(e){ out("❌ Android a refusé la notification : " + esc(e.message || String(e))); }
+}
 function notifBanner(){
   if (S.navNotif === false || notifPerm() !== "default") return "";
   return `<div class="card small" style="border-color:var(--brand)">🔔 <b>Revenir à l'application d'un geste</b> pendant le guidage : autorisez les notifications. Une notification « Revenir à l'application » s'affichera quand vous lancez Google Maps.
@@ -2122,7 +2134,9 @@ function notifReglage(){
   const st = p === "granted" ? "✓ Notifications autorisées" : p === "denied" ? "⚠ Notifications bloquées : Réglages du téléphone → Applications → Chrome (ou Ma tournée) → Notifications → Autoriser" : p === "default" ? `<button class="btn sm go" data-act="notifAsk">Autoriser les notifications</button>` : "Non disponible sur cet appareil";
   return `<label class="row" style="margin-top:12px;font-weight:800"><input type="checkbox" data-setb="navNotif" ${S.navNotif === false ? "" : "checked"} style="width:22px;height:22px"> 🔔 Notification « Revenir à l'application » quand je lance la navigation</label>
     <p class="small muted" style="margin:4px 0 0 30px">Utile avec Android Auto : le guidage reste sur l'écran de la voiture, et un appui sur la notification ramène l'application sur l'étape en cours. Décochez si vous n'en avez pas besoin.</p>
-    <div class="small" style="margin:6px 0 0 30px">${st}</div>`;
+    <div class="small" style="margin:6px 0 0 30px">${st}</div>
+    <button class="btn sm" style="margin:8px 0 0 30px" data-act="notifTest">🔔 Tester la notification</button>
+    <div id="notifDiag" class="small" style="margin:6px 0 0 30px"></div>`;
 }
 
 /* ---------- Réglages ---------- */
@@ -2701,6 +2715,7 @@ document.addEventListener("click", e => {
     case "msgs": msgsSheet(i); break;
     case "finish": finishRun(); break;
     case "notifAsk": askNotif(); break;
+    case "notifTest": testNotif(); break;
     case "abort": confirmSheet("Abandonner la tournée ?", "Elle ne sera pas enregistrée dans l'historique.", "abortOk", "Oui, abandonner"); break;
     case "copyMon": { const e2 = tour(sub.id).etabs[i] || tour(sub.id).etab; const m = e2.horaires[1] || {}; for (let d = 2; d <= 5; d++) e2.horaires[d] = { debut:m.debut||"", fin:m.fin||"" }; save(); render(); toast("Horaires recopiés"); break; }
     case "planYes": { const tid = lastEntry?.tourneeId || S.tournees[0]?.id; const dk = el.dataset.date, sens = el.dataset.sens;
