@@ -228,6 +228,7 @@ function mapsDirUrl(origin, destination, waypoints){
   if (origin) p.set("origin", origin);
   p.set("destination", destination);
   if (waypoints.length) p.set("waypoints", waypoints.join("|"));
+  else p.set("dir_action", "navigate");   // démarre le guidage directement, sans appuyer sur « Démarrer »
   return "https://www.google.com/maps/dir/?" + p.toString();
 }
 function mapsLinks(addrs){
@@ -2100,7 +2101,7 @@ async function showNavNotif(dest){
   try {
     const reg = swReg || await navigator.serviceWorker.ready;
     await reg.showNotification(dest ? `🧭 En route vers ${dest}` : "🧭 Navigation en cours", {
-      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: false, requireInteraction: true, silent: true,
+      body: "Revenir à l'application ?", tag: "tournee-nav", renotify: false, requireInteraction: true, vibrate: [120, 60, 120],
       icon: "icon-192.png", badge: "icon-192.png", actions: [{ action: "oui", title: "Oui" }, { action: "non", title: "Non" }] });
   } catch(e){}
 }
