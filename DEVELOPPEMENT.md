@@ -15,7 +15,7 @@ Application web d'un chauffeur de transport scolaire (remplacements). Utilisée 
 4. Interface et textes en français simple, gros boutons, utilisable d'une main entre deux arrêts.
 
 ## Fonctionnement des données
-- État principal `S` (document `tournee`) : `chauffeur`, `domicile`, `tpl` (modèles de SMS), `tournees[]`, `active` (tournée en cours), `next` (prochaine tournée prévue), `pleins[]` et `vehicules[]` (carburant).
+- État principal `S` (document `tournee`) : `chauffeur`, `domicile`, `tpl` (modèles de SMS), `tournees[]`, `active` (tournée en cours), `next` (prochaine tournée prévue), `pleins[]` et `vehicules[]` (carburant), `societes[]` (sociétés avec leurs lieux : siège, garage… et les personnes à appeler).
 - Historique `H` : un document par mois, `hist-AAAA-MM`, avec une liste d'entrées (début, fin, durée, enfants, absents, étapes).
 - Tournée : `{id, nom, multi, pause, dateUnique, midiOn, responsable, remplacement, ordreSoir, etabs[], enfants[]}`. L'établissement a des horaires par jour de semaine et un champ GPS facultatif.
 - Enfant : adresse, heure de ramassage du matin, commentaires matin et soir, `contacts[]`, `absences[]` et `altAdr[]`. Les autres adresses ont des jours matin et soir, une semaine sur deux possible, et une heure du matin propre (vide = heure générale).

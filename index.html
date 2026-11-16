@@ -161,7 +161,7 @@ const TPL_LABELS = {
   valideSoir: "Soir – enfant déposé (étape validée)",
   devant: "« Je suis devant chez vous »"
 };
-function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[], employeur:{ nom:"", agences:[] } }; }
+function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[], societes:[] }; }
 
 let S = blankState();
 let H = {};                 // historique : { "2026-11": [entrées] }
@@ -271,12 +271,17 @@ function normalize(st){
       tournees: enfants.length || s1.ecole ? [{ id:uid(), nom:"Ma tournée", etab:{ nom:"École", adresse:s1.ecole||"", tel:"" }, enfants }] : [],
       active:null };
   }
+  const hadSoc = Array.isArray(st.societes);
   const b = blankState();
   st = Object.assign(b, st);
   st.tpl = Object.assign({...DEFAULT_TPL}, st.tpl||{});
   st.modeAuto = false;
-  st.employeur = st.employeur && typeof st.employeur === "object" ? st.employeur : { nom: "", agences: [] };
-  st.employeur.agences = Array.isArray(st.employeur.agences) ? st.employeur.agences : [];
+  if (!hadSoc && st.employeur){   // reprise de l'ancienne rubrique « Employeur »
+    const E = st.employeur || {};
+    st.societes = (E.nom || (E.agences || []).length) ? [{ id: uid(), nom: E.nom || "", sites: (E.agences || []).map(a => ({ ...a, type: "Agence", nom: (a.nom || "").replace(/^agence\s*(de |d'|du |des )?/i, "") })) }] : [];
+  }
+  delete st.employeur;
+  st.societes.forEach(c => { c.sites = Array.isArray(c.sites) ? c.sites : []; });
   st.pleins = Array.isArray(st.pleins) ? st.pleins : []; st.vehicules = Array.isArray(st.vehicules) ? st.vehicules : [];   // mode Android Auto retiré : navigation étape par étape
   st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, pause: !!t.pause, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
@@ -2079,67 +2084,86 @@ let famTab = "familles";
 function renderFamilles(){
   const seg = `<div class="row" style="margin-bottom:10px">
     <button class="btn grow ${famTab === "familles" ? "brand" : ""}" data-act="famTab" data-id="familles">👨‍👩‍👧 Familles</button>
-    <button class="btn grow ${famTab === "employeur" ? "brand" : ""}" data-act="famTab" data-id="employeur">🏢 Employeur</button></div>`;
-  return seg + (famTab === "employeur" ? renderEmployeur() : renderFamillesListe());
+    <button class="btn grow ${famTab === "societe" ? "brand" : ""}" data-act="famTab" data-id="societe">🏢 Société</button></div>`;
+  return seg + (famTab === "societe" ? renderSocietes() : renderFamillesListe());
 }
-/* ---------- 🏢 Employeur : agences / branches, adresses et contacts ---------- */
-let ag = null;   // agence en cours de modification
-function renderEmployeur(){
-  const E = S.employeur, q = norm(famQ || "");
-  const list = E.agences.filter(a => !q || norm([a.nom, a.adresse, a.note, ...(a.contacts || []).map(c => (c.nom || "") + " " + (c.fonction || ""))].join(" ")).includes(q));
-  let h = `<input class="t" id="famSearch" placeholder="🔎 Rechercher une agence, une personne…" value="${esc(famQ)}" style="margin-bottom:10px">
-    <label class="f" style="margin-top:0">Nom de la société</label><input class="t" id="emp_nom" value="${esc(E.nom || "")}" placeholder="ex. Transports Dupont" style="margin-bottom:12px">`;
-  if (!E.agences.length) h += `<div class="card empty muted"><div class="big">🏢</div>Aucune agence enregistrée.<br><span class="small">Ajoutez le siège et les différentes agences de votre employeur, avec leur adresse et les personnes à contacter.</span></div>`;
-  list.forEach(a => {
-    const cs = (a.contacts || []).filter(c => c.nom || c.tel || c.email);
-    const dir = nav(a) ? "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", travelmode: "driving", destination: nav(a), dir_action: "navigate" }) : "";
-    h += `<div class="card"><div class="row"><span class="name grow">🏢 ${esc(a.nom || "Agence")}</span><button class="btn sm" data-act="agEdit" data-id="${a.id}">✏️ Modifier</button></div>
-      ${a.adresse ? `<div class="addr">📍 ${esc(a.adresse)}</div>` : ""}
-      ${a.horaires ? `<div class="small muted">🕘 ${esc(a.horaires)}</div>` : ""}
-      ${a.note ? `<div class="small muted">💬 ${esc(a.note)}</div>` : ""}
-      <div class="row" style="margin-top:8px">
-        ${a.tel ? `<a class="btn sm callf" data-href="${esc(telHref(a.tel))}">📞 Standard</a>` : ""}
-        ${a.email ? `<a class="btn sm" href="mailto:${esc(a.email)}">✉️ E-mail</a>` : ""}
-        ${dir ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(dir)}">🧭 Y aller</a>` : ""}</div>
-      ${cs.map(c => `<div class="contact"><div class="small" style="font-weight:800">👤 ${esc(c.nom || "Contact")}${c.fonction ? ` · <span class="muted">${esc(c.fonction)}</span>` : ""}</div>
-        ${c.tel ? `<div class="small muted">${esc(c.tel)}</div>` : ""}
-        <div class="row" style="margin-top:6px">${c.tel ? `<a class="btn callf grow ${c.email ? "sm" : ""}" data-href="${esc(telHref(c.tel))}">📞 Appeler</a><a class="btn smsf grow ${c.email ? "sm" : ""}" data-href="${esc(smsHref(c.tel, ""))}">💬 SMS</a>` : ""}${c.email ? `<a class="btn sm grow" href="mailto:${esc(c.email)}">✉️ E-mail</a>` : ""}</div></div>`).join("")}
-    </div>`;
+/* ---------- 🏢 Société : une ou plusieurs sociétés, avec leurs lieux (siège, garage…) et contacts ---------- */
+const SITE_TYPES = ["Siège", "Agence", "Garage", "Dépôt", "Atelier", "Bureau", "Autre"];
+const SITE_ICON = { "Siège": "🏢", "Agence": "🏬", "Garage": "🔧", "Dépôt": "🅿️", "Atelier": "🛠️", "Bureau": "🗂️", "Autre": "📍" };
+let ag = null, agSoc = null;   // lieu en cours de modification et sa société
+const socById = id => S.societes.find(c => c.id === id);
+function siteTitre(a){ return (SITE_ICON[a.type] || "📍") + " " + [a.type, a.nom].filter(Boolean).join(" — "); }
+function renderSocietes(){
+  const q = norm(famQ || "");
+  let h = `<input class="t" id="famSearch" placeholder="🔎 Rechercher un lieu, une personne…" value="${esc(famQ)}" style="margin-bottom:10px">`;
+  if (!S.societes.length) return h + `<div class="card empty muted"><div class="big">🏢</div>Aucune société enregistrée.<br><span class="small">Ajoutez la société pour laquelle vous travaillez, puis ses lieux : siège, garage, dépôt… avec les personnes à appeler.</span></div>
+    <button class="btn go lg" data-act="socNew">➕ Ajouter ma société</button>`;
+  S.societes.forEach(c => {
+    const sites = c.sites.filter(a => !q || norm([c.nom, a.type, a.nom, a.adresse, a.note, ...(a.contacts || []).map(x => (x.nom || "") + " " + (x.fonction || ""))].join(" ")).includes(q));
+    if (q && !sites.length) return;
+    h += `<div class="row" style="margin:14px 2px 6px"><span class="grow" style="font-weight:900;font-size:18px">🏢 ${esc(c.nom || "Société")}</span><button class="btn sm" data-act="socEdit" data-id="${c.id}">✏️ Nom</button></div>`;
+    if (!c.sites.length) h += `<p class="small muted" style="margin:0 2px 6px">Aucun lieu pour l'instant.</p>`;
+    sites.forEach(a => {
+      const cs = (a.contacts || []).filter(x => x.nom || x.tel || x.email);
+      const dir = nav(a) ? "https://www.google.com/maps/dir/?" + new URLSearchParams({ api: "1", travelmode: "driving", destination: nav(a), dir_action: "navigate" }) : "";
+      h += `<div class="card"><div class="row"><span class="name grow">${esc(siteTitre(a))}</span><button class="btn sm" data-act="agEdit" data-id="${a.id}" data-soc="${c.id}">✏️ Modifier</button></div>
+        ${a.adresse ? `<div class="addr">📍 ${esc(a.adresse)}</div>` : ""}
+        ${a.horaires ? `<div class="small muted">🕘 ${esc(a.horaires)}</div>` : ""}
+        ${a.note ? `<div class="small muted">💬 ${esc(a.note)}</div>` : ""}
+        <div class="row" style="margin-top:8px">
+          ${a.tel ? `<a class="btn sm callf" data-href="${esc(telHref(a.tel))}">📞 Standard</a>` : ""}
+          ${a.email ? `<a class="btn sm" href="mailto:${esc(a.email)}">✉️ E-mail</a>` : ""}
+          ${dir ? `<a class="btn sm" target="_blank" rel="noopener" href="${esc(dir)}">🧭 Y aller</a>` : ""}</div>
+        ${cs.map(x => `<div class="contact"><div class="small" style="font-weight:800">👤 ${esc(x.nom || "Contact")}${x.fonction ? ` · <span class="muted">${esc(x.fonction)}</span>` : ""}</div>
+          ${x.tel ? `<div class="small muted">${esc(x.tel)}</div>` : ""}
+          <div class="row" style="margin-top:6px">${x.tel ? `<a class="btn callf grow ${x.email ? "sm" : ""}" data-href="${esc(telHref(x.tel))}">📞 Appeler</a><a class="btn smsf grow ${x.email ? "sm" : ""}" data-href="${esc(smsHref(x.tel, ""))}">💬 SMS</a>` : ""}${x.email ? `<a class="btn sm grow" href="mailto:${esc(x.email)}">✉️ E-mail</a>` : ""}</div></div>`).join("")}
+      </div>`;
+    });
+    if (!q) h += `<button class="btn w100" data-act="agNew" data-id="${c.id}">➕ Ajouter un lieu à ${esc(c.nom || "cette société")} (siège, garage…)</button>`;
   });
-  h += `<button class="btn w100" data-act="agNew" style="margin-top:4px">➕ Ajouter une agence</button>`;
+  if (!q) h += `<button class="btn sm w100" style="margin-top:18px" data-act="socNew">➕ Ajouter une autre société</button>`;
   if (empRows().length) h += `<button class="btn w100" style="margin-top:8px" data-act="empVcf">📇 Ajouter ces numéros aux contacts du téléphone</button>`;
   return h;
 }
 function empRows(){
-  const soc = S.employeur.nom || "Employeur", rows = [];
-  S.employeur.agences.forEach(a => {
-    if (a.tel) rows.push({ name: `${soc} – ${a.nom || "Agence"}`, tel: a.tel, note: `${soc} – ${a.nom || ""}${a.adresse ? " – " + a.adresse : ""}` });
-    (a.contacts || []).filter(c => c.tel).forEach(c => rows.push({ name: `${c.nom || "Contact"} (${soc}${a.nom ? " " + a.nom : ""})`, tel: c.tel, note: `${c.fonction ? c.fonction + " – " : ""}${soc} – ${a.nom || ""}${c.email ? " – " + c.email : ""}` }));
-  });
+  const rows = [];
+  S.societes.forEach(c => c.sites.forEach(a => {
+    const lieu = [c.nom || "Société", a.type, a.nom].filter(Boolean).join(" ");
+    if (a.tel) rows.push({ name: lieu, tel: a.tel, note: lieu + (a.adresse ? " – " + a.adresse : "") });
+    (a.contacts || []).filter(x => x.tel).forEach(x => rows.push({ name: `${x.nom || "Contact"} (${lieu})`, tel: x.tel, note: `${x.fonction ? x.fonction + " – " : ""}${lieu}${x.email ? " – " + x.email : ""}` }));
+  }));
   return rows;
+}
+function socSheet(c){
+  openSheet(`<h2>🏢 ${c ? "Nom de la société" : "Nouvelle société"}</h2>
+    <input class="t" id="soc_nom" value="${esc(c?.nom || "")}" placeholder="ex. Transports Dupont">
+    <button class="btn go lg" style="margin-top:14px" data-act="socSave" data-id="${c ? c.id : ""}">✓ Enregistrer</button>
+    ${c ? `<button class="btn sm danger" style="margin-top:10px" data-act="socDel" data-id="${c.id}">🗑 Supprimer cette société${c.sites.length ? ` et ses ${c.sites.length} lieu${c.sites.length > 1 ? "x" : ""}` : ""}</button>` : ""}
+    <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
 }
 function agReadForm(){
   const g = id => (document.getElementById(id)?.value || "").trim();
-  Object.assign(ag, { nom: g("ag_nom"), adresse: g("ag_adr"), tel: g("ag_tel"), email: g("ag_email"), horaires: g("ag_hor"), note: g("ag_note") });
+  Object.assign(ag, { type: g("ag_type"), nom: g("ag_nom"), adresse: g("ag_adr"), tel: g("ag_tel"), email: g("ag_email"), horaires: g("ag_hor"), note: g("ag_note") });
   ag.contacts = ag.contacts.map((c, i) => ({ nom: g("agc_nom_" + i), fonction: g("agc_fct_" + i), tel: g("agc_tel_" + i), email: g("agc_mail_" + i) }));
 }
 function agSheet(){
-  const isNew = !S.employeur.agences.some(a => a.id === ag.id);
-  openSheet(`<h2>🏢 ${isNew ? "Nouvelle agence" : "Modifier l'agence"}</h2>
-    <label class="f">Nom de l'agence ou de la branche</label><input class="t" id="ag_nom" value="${esc(ag.nom)}" placeholder="ex. Agence de Riom, Siège, Dépôt…">
+  const soc = socById(agSoc); const isNew = !soc.sites.some(a => a.id === ag.id);
+  openSheet(`<h2>${isNew ? "➕ Nouveau lieu" : "✏️ Modifier le lieu"}</h2><p class="small muted" style="margin-top:0">🏢 ${esc(soc.nom || "Société")}</p>
+    <div class="row"><div style="flex:0 0 42%"><label class="f">Type</label><select class="t" id="ag_type">${SITE_TYPES.map(x => `<option ${x === ag.type ? "selected" : ""}>${x}</option>`).join("")}</select></div>
+      <div class="grow"><label class="f">Précision (facultatif)</label><input class="t" id="ag_nom" value="${esc(ag.nom)}" placeholder="ex. Riom, nord…"></div></div>
     <label class="f">Adresse</label>${addrField('id="ag_adr"', ag.adresse || "", "ex. 12 rue de la Gare, 63200 Riom")}
-    <div class="row"><div class="grow"><label class="f">Téléphone (standard)</label><input class="t" id="ag_tel" type="tel" value="${esc(ag.tel)}" placeholder="04 73 …"></div>
-      <div class="grow"><label class="f">E-mail</label><input class="t" id="ag_email" type="email" value="${esc(ag.email)}" placeholder="agence@…"></div></div>
+    <div class="row"><div class="grow"><label class="f">Téléphone du lieu</label><input class="t" id="ag_tel" type="tel" value="${esc(ag.tel)}" placeholder="04 73 …"></div>
+      <div class="grow"><label class="f">E-mail</label><input class="t" id="ag_email" type="email" value="${esc(ag.email)}" placeholder="facultatif"></div></div>
     <label class="f">Horaires d'ouverture</label><input class="t" id="ag_hor" value="${esc(ag.horaires)}" placeholder="ex. lun-ven 7h-18h">
     <label class="f">Remarque</label><input class="t" id="ag_note" value="${esc(ag.note)}" placeholder="ex. clés du véhicule à l'accueil">
-    <h3 style="margin:16px 0 4px">👤 Personnes à contacter</h3>
+    <h3 style="margin:16px 0 4px">👤 Personnes à appeler</h3>
     ${ag.contacts.map((c, i) => `<div class="card" style="padding:10px 12px;margin:8px 0">
       <div class="row"><input class="t grow" id="agc_nom_${i}" value="${esc(c.nom)}" placeholder="Nom et prénom"><button class="btn sm danger" data-act="agcDel" data-i="${i}">✕</button></div>
-      <input class="t" id="agc_fct_${i}" value="${esc(c.fonction)}" placeholder="Fonction (ex. responsable planning)" style="margin-top:6px">
-      <div class="row" style="margin-top:6px"><input class="t grow" id="agc_tel_${i}" type="tel" value="${esc(c.tel)}" placeholder="Téléphone"><input class="t grow" id="agc_mail_${i}" type="email" value="${esc(c.email)}" placeholder="E-mail"></div></div>`).join("")}
+      <input class="t" id="agc_fct_${i}" value="${esc(c.fonction)}" placeholder="Fonction (ex. chef de garage, planning)" style="margin-top:6px">
+      <div class="row" style="margin-top:6px"><input class="t grow" id="agc_tel_${i}" type="tel" value="${esc(c.tel)}" placeholder="Téléphone"><input class="t grow" id="agc_mail_${i}" type="email" value="${esc(c.email)}" placeholder="E-mail (facultatif)"></div></div>`).join("")}
     <button class="btn sm" data-act="agcAdd">➕ Ajouter une personne</button>
     <button class="btn go lg" style="margin-top:14px" data-act="agSave">✓ Enregistrer</button>
-    ${isNew ? "" : `<button class="btn sm danger" style="margin-top:10px" data-act="agDel">🗑 Supprimer cette agence</button>`}
+    ${isNew ? "" : `<button class="btn sm danger" style="margin-top:10px" data-act="agDel">🗑 Supprimer ce lieu</button>`}
     <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
 }
 function renderFamillesListe(){
@@ -2832,17 +2856,23 @@ document.addEventListener("click", e => {
     case "unpause": { const t = tour(id); t.pause = false; save(); if (sub?.type !== "edit") sub = null; render(); toast(`« ${t.nom} » reprise ✓`); break; }
     case "famMsgs": famMsgsSheet(id); break;
     case "famTab": famTab = id; famQ = ""; render(); break;
-    case "agNew": ag = { id: uid(), nom: "", adresse: "", tel: "", email: "", horaires: "", note: "", contacts: [{ nom: "", fonction: "", tel: "", email: "" }] }; agSheet(); break;
-    case "agEdit": { const a = S.employeur.agences.find(x => x.id === id); if (a){ ag = JSON.parse(JSON.stringify(a)); ag.contacts = ag.contacts || []; agSheet(); } break; }
+    case "socNew": socSheet(null); break;
+    case "socEdit": socSheet(socById(id)); break;
+    case "socSave": { const nom = (document.getElementById("soc_nom")?.value || "").trim(); if (!nom){ toast("Indiquez le nom de la société"); break; }
+      const c = id && socById(id); if (c) c.nom = nom; else S.societes.push({ id: uid(), nom, sites: [] });
+      save(); closeSheet(); render(); toast("Société enregistrée ✓"); break; }
+    case "socDel": if (el.dataset.ok !== "1"){ el.dataset.ok = "1"; el.textContent = "Confirmer la suppression ?"; break; }
+      S.societes = S.societes.filter(c => c.id !== id); save(); closeSheet(); render(); toast("Société supprimée"); break;
+    case "agNew": agSoc = id; ag = { id: uid(), type: socById(id).sites.length ? "Garage" : "Siège", nom: "", adresse: "", tel: "", email: "", horaires: "", note: "", contacts: [{ nom: "", fonction: "", tel: "", email: "" }] }; agSheet(); break;
+    case "agEdit": { agSoc = el.dataset.soc; const a = socById(agSoc)?.sites.find(x => x.id === id); if (a){ ag = JSON.parse(JSON.stringify(a)); ag.contacts = ag.contacts || []; agSheet(); } break; }
     case "agcAdd": agReadForm(); ag.contacts.push({ nom: "", fonction: "", tel: "", email: "" }); agSheet(); break;
     case "agcDel": agReadForm(); ag.contacts.splice(Number(el.dataset.i), 1); agSheet(); break;
     case "agSave": { agReadForm(); ag.contacts = ag.contacts.filter(c => c.nom || c.tel || c.email);
-      if (!ag.nom && !ag.adresse){ toast("Indiquez au moins le nom ou l'adresse"); break; }
-      const L = S.employeur.agences, j = L.findIndex(x => x.id === ag.id); if (j >= 0) L[j] = ag; else L.push(ag);
-      save(); ag = null; closeSheet(); render(); toast("Agence enregistrée ✓"); break; }
+      const L = socById(agSoc).sites, j = L.findIndex(x => x.id === ag.id); if (j >= 0) L[j] = ag; else L.push(ag);
+      save(); ag = null; closeSheet(); render(); toast("Lieu enregistré ✓"); break; }
     case "agDel": if (el.dataset.ok !== "1"){ el.dataset.ok = "1"; el.textContent = "Confirmer la suppression ?"; break; }
-      S.employeur.agences = S.employeur.agences.filter(x => x.id !== ag.id); save(); ag = null; closeSheet(); render(); toast("Agence supprimée"); break;
-    case "empVcf": saveVcf(empRows(), "employeur.vcf"); break;
+      { const c = socById(agSoc); c.sites = c.sites.filter(x => x.id !== ag.id); } save(); ag = null; closeSheet(); render(); toast("Lieu supprimé"); break;
+    case "empVcf": saveVcf(empRows(), "societe.vcf"); break;
     case "clearDateUnique": tour(sub.id).dateUnique = ""; save(); render(); break;
     case "delTourQuick": { pendingTourDel = id; const t = tour(id); confirmSheet(`Supprimer « ${esc(t?.nom || "")} » ?`, "Cette tournée occasionnelle est passée. Son historique est conservé.", "delTourQuickOk", "Oui, supprimer"); break; }
     case "delTourQuickOk": S.tournees = S.tournees.filter(t => t.id !== pendingTourDel); save(); closeSheet(); render(); toast("Tournée supprimée (historique conservé)"); break;
@@ -2920,7 +2950,6 @@ document.addEventListener("change", e => {
     saveHist(mk); render(); toast("Horaire corrigé"); return;
   }
   if (t.id === "k_heure"){ const a = document.getElementById("alt_heure"); if (a && (!a.value || a.value === a.dataset.gen)) a.value = t.value; if (a) a.dataset.gen = t.value; return; }
-  if (t.id === "emp_nom"){ S.employeur.nom = t.value.trim(); save(); toast("Enregistré ✓"); return; }
   if (t.id === "sim_date" && t.value){ sim.date = t.value; simSheet(); return; }
   if (t.id === "sim_sens"){ sim.sens = t.value; simSheet(); return; }
   if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
