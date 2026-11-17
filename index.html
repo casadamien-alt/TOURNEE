@@ -1617,11 +1617,18 @@ function pointPdf(){
     let x = M; cols.forEach(([, w]) => { L(x, yBot, x, yTop); x += w; }); L(W - M, yBot, W - M, yTop);
     y = yBot;
   });
-  if (y - RH < M + 30) newPage(false);
+  // bloc réservé à l'employeur (à laisser vide) : calcul des heures à ajouter
+  if (y - 3 * RH < M + 30) newPage(false);
+  const mid = M + (W - 2*M) / 2;
   ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
-  T(M + 6, y - 15, "TOTAL DES HEURES", 9, true);
-  T(M + 6 + cols[0][1] + cols[1][1] + cols[2][1] + cols[3][1], y - 15, hmDur(tot), 9, true);
-  y -= RH;
+  T(M + 6, y - 15, "Calcul des heures à ajouter – Heures réalisées (rubrique renseignée par Virginie Corbelin)", 9, true);
+  L(M, y - RH, W - M, y - RH); y -= RH;
+  [["BASE H/MOIS DU CONTRAT"], ["Nombre d'heures COMPLÉMENTAIRES"]].forEach(([lib]) => {
+    const yTop = y, yBot = y - RH;
+    T(M + (mid - M) / 2 - txtW(lib, 9, false) / 2, yBot + 8, lib, 9, false);
+    L(M, yBot, W - M, yBot); L(M, yTop, M, yBot); L(mid, yTop, mid, yBot); L(W - M, yTop, W - M, yBot);
+    y = yBot;
+  });
   pages.push(ops);
   // écriture du PDF
   const objs = []; const add = o => { objs.push(o); return objs.length; };
