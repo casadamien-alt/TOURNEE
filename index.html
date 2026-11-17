@@ -222,6 +222,36 @@ function absTxt(x){
   return per + tr + (x.motif ? " — " + x.motif : "");
 }
 function tour(id){ return S.tournees.find(t => t.id === id); }
+// sauvegarde de l'ordre précédent avant chaque « garder » : un seul retour arrière possible
+function snapOrdre(t){
+  t.ordrePrec = { ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir.slice() : null,
+    ordreRetour: Array.isArray(t.ordreRetour) ? t.ordreRetour.slice() : null,
+    retourJour: t.retourJour ? JSON.parse(JSON.stringify(t.retourJour)) : null };
+}
+function restaurerOrdre(t){
+  const p = t.ordrePrec; if (!p) return false;
+  t.ordreSoir = p.ordreSoir || undefined; if (!p.ordreSoir) delete t.ordreSoir;
+  if (p.ordreRetour) t.ordreRetour = p.ordreRetour; else delete t.ordreRetour;
+  if (p.retourJour) t.retourJour = p.retourJour; else delete t.retourJour;
+  t.ordrePrec = null; return true;
+}
+function ordreDefaut(t){
+  snapOrdre(t); delete t.ordreSoir; delete t.ordreRetour; delete t.retourJour;
+}
+// ordre des établissements au retour : par défaut l'inverse de l'aller, puis modifiable (t.ordreRetour = liste d'identifiants)
+function wdOf(dk){ return new Date((dk || dayKey(new Date())) + "T12:00:00").getDay(); }
+// t.retourJour[0..6] = {etabs:[ids], kids:[ids]} : ordre propre à un jour de la semaine (ex. mercredi)
+function etabsRetourGen(t){
+  if (!Array.isArray(t.ordreRetour)) return t.etabs.slice().reverse();
+  const ids = t.etabs.map(e => e.id); const o = t.ordreRetour.filter(id => ids.includes(id));
+  return [...o, ...ids.filter(id => !o.includes(id))].map(id => t.etabs.find(e => e.id === id));
+}
+function etabsRetour(t, dk){
+  const ex = t.retourJour?.[wdOf(dk)];
+  if (!ex || !Array.isArray(ex.etabs)) return etabsRetourGen(t);
+  const ids = t.etabs.map(e => e.id); const o = ex.etabs.filter(id => ids.includes(id));
+  return [...o, ...ids.filter(id => !o.includes(id))].map(id => t.etabs.find(e => e.id === id));
+}
 function kidName(k){ return (k.prenom||"") + (k.nom ? " "+k.nom : ""); }
 
 function telNorm(tel){
@@ -299,7 +329,7 @@ function normalize(st){
   st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, pause: !!t.pause, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
     remplacement: Object.assign({actif:false,nom:"",tel:"",du:"",au:""}, t.remplacement||{}),
-    ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
+    ordreSoir: Array.isArray(t.ordreSoir) ? t.ordreSoir : null, ordreRetour: Array.isArray(t.ordreRetour) ? t.ordreRetour : undefined, retourJour: (t.retourJour && typeof t.retourJour === "object") ? t.retourJour : undefined, ordrePrec: t.ordrePrec || undefined, etabs: (Array.isArray(t.etabs) && t.etabs.length ? t.etabs : [t.etab]).map(e => { e = migrateEtab(e); e.id = e.id || uid(); return e; }), enfants:(t.enfants||[]).map(k => Object.assign({id:uid(),prenom:"",nom:"",adresse:"",heureMatin:"",comMatin:"",comSoir:"",note:"",matin:true,soir:true,contacts:[],absences:[]}, k)) })).map(linkEtabs);
   return st;
 }
 
@@ -636,9 +666,11 @@ function eligible(t, sens, dk){
   const list = t.enfants.filter(k => dayPlan(k, day)[sens] === true);
   if (sens === "matin") return list;
   const rev = list.slice().reverse();                        // le soir : ordre inverse du matin…
-  if (!Array.isArray(t.ordreSoir) || !t.ordreSoir.length) return rev;
-  const pos = id => { const p = t.ordreSoir.indexOf(id); return p < 0 ? 1e6 + rev.findIndex(k => k.id === id) : p; };
-  return rev.sort((a,b) => pos(a.id) - pos(b.id));          // …ou ordre du soir personnalisé
+  const ex = t.retourJour?.[wdOf(day)];
+  const ordS = ex && Array.isArray(ex.kids) && ex.kids.length ? ex.kids : t.ordreSoir;
+  if (!Array.isArray(ordS) || !ordS.length) return rev;
+  const pos = id => { const p = ordS.indexOf(id); return p < 0 ? 1e6 + rev.findIndex(k => k.id === id) : p; };
+  return rev.sort((a,b) => pos(a.id) - pos(b.id));          // …ou ordre du soir personnalisé (général, ou propre au jour)
 }
 function prepKids(){ const t = tour(sub.id); const all = eligible(t, sub.sens); return sub.order.map(id => all.find(k => k.id === id)).filter(Boolean); }
 function saveOrderPermanent(t, sens, ids){
@@ -658,7 +690,7 @@ function startRun(){
   // une étape par établissement concerné, avec ses enfants (matin : après les ramassages ; soir : avant les dépôts)
   const etabSteps = t.etabs.map(e => ({ type:"etab", etab: JSON.parse(JSON.stringify(e)), kids: kids.filter(k => kidEtab(t, k).id === e.id).map(k => k.id), at:null })).filter(x => x.kids.length);
   if (sens === "matin") steps.push(...etabSteps);
-  else steps.unshift(...etabSteps.reverse());
+  else { const ord = (sub.retourEtabs || etabsRetour(t).map(e => e.id)); steps.unshift(...etabSteps.slice().sort((a, b) => ord.indexOf(a.etab.id) - ord.indexOf(b.etab.id))); }
   S.active = {
     id: uid(), tourneeId:t.id, tourneeNom:t.nom, etab:{...t.etab}, sens,
     responsable: {...(t.responsable||{})}, remplace: remplActif(t) ? t.remplacement.nom : "",
@@ -712,7 +744,7 @@ function simSheet(){
   } else {
     const groups = t.etabs.map(e => ({ e, kids: pres.filter(k => kidEtab(t, k).id === e.id) })).filter(g => g.kids.length);
     let n = 0;
-    if (sens === "soir") groups.slice().reverse().forEach(g => { h += etabLine(g.e, g.kids); });
+    if (sens === "soir") etabsRetour(t, dk).forEach(e => { const g = groups.find(x => x.e.id === e.id); if (g) h += etabLine(g.e, g.kids); });
     pres.forEach(k => { h += kidLine(k, ++n); });
     if (sens === "matin") groups.forEach(g => { h += etabLine(g.e, g.kids); });
     if (S.domicile) h += `<div class="small muted" style="margin:6px 2px">🏠 Puis retour à la maison</div>`;
@@ -721,7 +753,7 @@ function simSheet(){
   let first = null;
   if (pres.length){
     if (sens === "matin"){ const ek = effKid(pres[0], dk, "matin"); first = { nom: kidName(pres[0]), adr: nav(ek) }; }
-    else { const g = t.etabs.map(e => ({ e, n: pres.filter(k => kidEtab(t, k).id === e.id).length })).filter(x => x.n); const e = sens === "soir" ? g[g.length - 1]?.e : kidEtab(t, pres[0]); if (e) first = { nom: e.nom || "Établissement", adr: nav(e) }; }
+    else { const g = t.etabs.map(e => ({ e, n: pres.filter(k => kidEtab(t, k).id === e.id).length })).filter(x => x.n); const e = sens === "soir" ? etabsRetour(t, dk).find(x => pres.some(k => kidEtab(t, k).id === x.id)) : kidEtab(t, pres[0]); if (e) first = { nom: e.nom || "Établissement", adr: nav(e) }; }
   }
   if (first && first.adr){
     const q = new URLSearchParams({ api: "1", travelmode: "driving", destination: first.adr }); if (S.domicile) q.set("origin", S.domicile);
@@ -1176,22 +1208,26 @@ function prepEtabCards(t){
     return from.map(e => `<div class="card row" style="background:var(--brand-soft)"><span style="font-size:22px">🏫</span><div class="grow"><b>Récupérer à ${esc(e.nom || "l'établissement")}</b><div class="addr">${esc(e.adresse)}</div></div></div>`).join("")
       + `<div class="card" style="background:var(--go-bg)"><b>🏁 Puis déposer :</b><div class="small" style="margin-top:4px">${dests.join("<br>") || "—"}</div></div>`;
   }
-  const list = sub.sens === "soir" ? t.etabs.slice().reverse() : t.etabs;
-  return list.map(e => { const h = horaire(e, new Date()); const ref = sub.sens === "matin" ? h.debut : h.fin;
+  const list = sub.sens === "soir" ? (sub.retourEtabs || etabsRetour(t).map(e => e.id)).map(id => t.etabs.find(e => e.id === id)).filter(Boolean) : t.etabs;
+  return list.map((e, ri) => { const h = horaire(e, new Date()); const ref = sub.sens === "matin" ? h.debut : h.fin;
     const ks = prepKids().filter(k => kidEtab(t, k).id === e.id);
     if (t.etabs.length > 1 && !ks.length) return "";
+    const ordBtns = sub.reorder && sub.sens === "soir" && t.etabs.length > 1 ? `<div class="ord" style="flex-direction:row;margin-left:6px"><button data-act="pEtUp" data-i="${ri}" ${ri===0?"disabled":""}>▲</button><button data-act="pEtDown" data-i="${ri}" ${ri===list.length-1?"disabled":""}>▼</button></div>` : "";
     return `<div class="card row" style="background:${sub.sens === "soir" ? "var(--night-soft)" : "var(--brand-soft)"}"><span style="font-size:22px">🏫</span><div class="grow"><b>${esc(e.nom || "Établissement")}</b><div class="addr">${esc(e.adresse)}</div>
       ${ref ? `<div class="small" style="font-weight:800;margin-top:2px">${sub.sens === "matin" ? "🕗 Début des cours : " : "🕓 Fin de journée : "}${hTxt(ref)}</div>` : ""}
-      ${t.etabs.length > 1 ? `<div class="small muted" style="margin-top:2px">${sub.sens === "matin" ? "Déposer" : "Récupérer"} : ${ks.map(k => esc(k.prenom)).join(", ")}</div>` : ""}</div></div>`; }).join("");
+      ${t.etabs.length > 1 ? `<div class="small muted" style="margin-top:2px">${sub.sens === "matin" ? "Déposer" : "Récupérer"} : ${ks.map(k => esc(k.prenom)).join(", ")}</div>` : ""}</div>${ordBtns}</div>`; }).join("");
 }
 function renderPrep(){
   const t = tour(sub.id); const kids = prepKids();
-  const usual = eligible(t, sub.sens).map(k => k.id).join(); const changed = sub.order.join() !== usual;
+  const usual = eligible(t, sub.sens).map(k => k.id).join();
+  const etabsChanged = sub.sens === "soir" && sub.retourEtabs && sub.retourEtabs.join() !== etabsRetour(t).map(e => e.id).join();
+  const changed = sub.order.join() !== usual || etabsChanged;
+  const multiRetour = sub.sens === "soir" && new Set(kids.filter(k => sub.present.includes(k.id)).map(k => kidEtab(t, k).id)).size > 1;
   let h = `<div class="card"><div class="row"><span class="grow small muted" style="font-weight:700">${sub.present.length} présent${sub.present.length>1?"s":""} sur ${kids.length}</span>
       <button class="btn sm" data-act="prepAll">✅ Tous</button><button class="btn sm" data-act="prepNone">⬜ Aucun</button></div>
       <div class="row" style="margin-top:8px"><button class="btn sm ${sub.reorder?"primary":""}" data-act="prepReorder">↕️ ${sub.reorder?"Terminer l'ordre":"Changer l'ordre"}</button>
         ${changed ? `<span class="pill" style="background:#ffe7d6;color:var(--warn)">ordre modifié pour aujourd'hui</span>` : ""}</div>
-      ${changed ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="prepKeep">💾 Garder cet ordre pour toujours</button><button class="btn sm" data-act="prepUsual">↺ Revenir à l'ordre habituel</button></div>` : ""}
+      ${changed ? `<div class="row" style="margin-top:8px"><button class="btn sm" data-act="prepKeep">💾 Garder cet ordre pour toujours</button>${multiRetour ? `<button class="btn sm" data-act="pKeepDay">📅 Garder pour tous les ${JOURS_LONG[wdOf()]}s</button>` : ""}<button class="btn sm" data-act="prepUsual">↺ Revenir à l'ordre habituel</button></div>` : ""}
       <p class="small muted" style="margin:8px 0 0">${sub.sens === "midi" ? "Trajet de midi : récupération dans l'établissement, puis dépôt dans l'établissement d'arrivée." : sub.sens === "matin" ? "Ordre de ramassage du matin, puis l'établissement." : "Départ de chez vous, 1re étape l'établissement, puis dépôt dans l'ordre inverse du matin, puis retour. Vous pourrez confirmer la liste des enfants présents en arrivant à l'établissement."}</p></div>`;
   if (sub.sens === "soir") h += prepEtabCards(t);
   kids.forEach((k, idx) => {
@@ -1402,7 +1438,7 @@ function renderEdit(){
   </div>
   ${t.etabs.map((e, ei) => `<div class="card"><div class="row"><h3 class="grow" style="margin:0">🏫 Établissement${t.etabs.length > 1 ? " " + (ei+1) : ""}</h3>
       ${t.etabs.length > 1 ? `<div class="ord" style="flex-direction:row"><button data-act="eUp" data-i="${ei}" ${ei===0?"disabled":""}>▲</button><button data-act="eDown" data-i="${ei}" ${ei===t.etabs.length-1?"disabled":""}>▼</button></div><button class="btn sm danger" data-act="delEtab" data-i="${ei}">✖</button>` : ""}</div>
-    <p class="small muted" style="margin:4px 0 0">${t.etabs.length > 1 ? "Le matin, les établissements sont faits dans cet ordre après les ramassages ; le soir, dans l'ordre inverse avant les dépôts." : "Destination le matin, point de départ le soir."}</p>
+    <p class="small muted" style="margin:4px 0 0">${t.etabs.length > 1 ? "Le matin, les établissements sont faits dans cet ordre après les ramassages ; le retour suit l'ordre indiqué ci-dessous avant les dépôts." : "Destination le matin, point de départ le soir."}</p>
     ${(() => { const kn = knownEtabs().filter(x => !t.etabs.some(y => etabKey(y) === etabKey(x))); return kn.length ? `<label class="f">📋 Reprendre un établissement déjà enregistré</label>
       <select class="t" data-etabpick="${ei}"><option value="">— choisir dans la liste —</option>${kn.map((x, n) => `<option value="${n}">${esc(x.nom || "Sans nom")}${x.adresse ? " — " + esc(x.adresse) : ""}</option>`).join("")}</select>` : ""; })()}
     <label class="f">Nom (école, IME…)</label><input class="t" data-tf="etabs.${ei}.nom" value="${esc(e.nom)}" placeholder="ex. IME Les Tilleuls">
@@ -1421,6 +1457,13 @@ function renderEdit(){
     <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
     ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
   </div>`).join("")}
+  ${(t.ordrePrec || Array.isArray(t.ordreSoir) || Array.isArray(t.ordreRetour) || t.retourJour) ? `<div class="card"><h3>↩️ Ordres enregistrés</h3>
+    <p class="small muted" style="margin:0 0 6px">${t.ordrePrec ? "Un ordre précédent peut être rétabli." : "Pas d'ordre précédent à rétablir."}</p>
+    <div class="row">${t.ordrePrec ? `<button class="btn sm" data-act="ordreRestore">↺ Annuler le dernier changement</button>` : ""}<button class="btn sm" data-act="ordreDefaut">Revenir à l'ordre par défaut</button></div></div>` : ""}
+  ${t.etabs.length > 1 ? `<div class="card"><h3>🔁 Ordre au retour</h3>
+    <p class="small muted" style="margin:0 0 6px">Par défaut, l'inverse de l'aller. Vous pouvez le changer à tout moment.</p>
+    ${etabsRetourGen(t).map((e, ri) => `<div class="row" style="align-items:center"><span class="grow">${ri+1}. 🏫 ${esc(e.nom || "Établissement")}</span><div class="ord" style="flex-direction:row"><button data-act="rUp" data-i="${ri}" ${ri===0?"disabled":""}>▲</button><button data-act="rDown" data-i="${ri}" ${ri===t.etabs.length-1?"disabled":""}>▼</button></div></div>`).join("")}
+    ${Array.isArray(t.ordreRetour) ? `<button class="btn sm" style="margin-top:6px" data-act="rReset">↺ Revenir à l'inverse de l'aller</button>` : ""}</div>` : ""}
   ${t.etabs.length > 1 ? `<div class="card" style="background:#f3faf6;border-color:#bfe3d2"><h3>🕛 Trajet de midi</h3>
     <label class="row" style="font-weight:800"><input type="checkbox" data-tf="midiOn" ${t.midiOn ? "checked" : ""} style="width:22px;height:22px"> Cette tournée a un trajet le midi, d'un établissement à un autre</label>
     ${t.midiOn ? `<label class="f">Établissement d'arrivée le midi (par défaut)</label><select class="t" data-tf="midiDest">${t.etabs.map(e => `<option value="${e.id}" ${e.id === (t.midiDest || t.etabs[t.etabs.length-1].id) ? "selected" : ""}>${esc(e.nom || "Établissement")}</option>`).join("")}</select>
@@ -3101,12 +3144,13 @@ document.addEventListener("click", e => {
           <div class="row"><button class="btn go grow" data-act="prep" data-id="${t.id}" data-sens="${s}" data-force="1">Oui, lancer</button><button class="btn grow" data-act="close">Annuler</button></div>`); break; }
       closeSheet(); const ids = eligible(t, s).map(k => k.id); const td = dayKey(new Date());
       const prev = eligible(t, s).filter(k => absentPrevu(k, td, s)).map(k => k.id);
-      sub = {type:"prep", id, sens:s, present: ids.filter(x => !prev.includes(x)), order: ids.slice(), reorder:false};
+      sub = {type:"prep", id, sens:s, present: ids.filter(x => !prev.includes(x)), order: ids.slice(), reorder:false,
+        retourEtabs: s === "soir" ? etabsRetour(t, td).map(e => e.id) : null};
       if (prev.length) toast(`${prev.length} absence${prev.length>1?"s":""} prévue${prev.length>1?"s":""} déjà décochée${prev.length>1?"s":""}`); render(); window.scrollTo(0,0); break; }
     case "prepReorder": sub.reorder = !sub.reorder; render(); break;
     case "pUp": case "pDown": { e.preventDefault(); const o = sub.order; const j = a === "pUp" ? i-1 : i+1; if (j>=0 && j<o.length){ [o[i],o[j]] = [o[j],o[i]]; render(); } break; }
     case "prepUsual": sub.order = eligible(tour(sub.id), sub.sens).map(k => k.id); render(); break;
-    case "prepKeep": saveOrderPermanent(tour(sub.id), sub.sens, sub.order); save(); render(); toast("Nouvel ordre enregistré pour les prochaines fois ✓"); break;
+    case "prepKeep": { const t = tour(sub.id); snapOrdre(t); saveOrderPermanent(t, sub.sens, sub.order); if (sub.sens === "soir" && sub.retourEtabs) t.ordreRetour = sub.retourEtabs.slice(); save(); render(); toast("Nouvel ordre enregistré pour les prochaines fois ✓"); break; }
     case "runReorder": runReorder = !runReorder; render(); break;
     case "rUp": case "rDown": {
       const st = S.active.steps; const mv = st.map((s,x) => (s.type === "kid" && !s.at) ? x : -1).filter(x => x >= 0);
@@ -3189,6 +3233,12 @@ document.addEventListener("click", e => {
     case "addEtab": { e.preventDefault(); const t = tour(sub.id); t.multi = true; t.etabs.push({ id: uid(), nom:"", adresse:"", tel:"", gps:"", horaires:{} }); linkEtabs(t); save(); render(); toast("Établissement ajouté"); break; }
     case "delEtab": { const t = tour(sub.id); if (t.etabs.length < 2) break; pendingEtab = i; confirmSheet(`Retirer ${esc(t.etabs[i].nom || "cet établissement")} ?`, "Les enfants qui y allaient seront rattachés au premier établissement.", "delEtabOk", "Oui, retirer"); break; }
     case "delEtabOk": { const t = tour(sub.id); t.etabs.splice(pendingEtab, 1); linkEtabs(t); save(); closeSheet(); render(); break; }
+    case "pEtUp": case "pEtDown": { const o = sub.retourEtabs.slice(); const j = a === "pEtUp" ? i-1 : i+1; if (j>=0 && j<o.length){ [o[i],o[j]] = [o[j],o[i]]; sub.retourEtabs = o; render(); } break; }
+    case "pKeepDay": { const t = tour(sub.id); snapOrdre(t); t.retourJour = t.retourJour || {}; t.retourJour[wdOf(dayKey(new Date()))] = { etabs: sub.retourEtabs.slice(), kids: sub.order.slice() }; save(); render(); toast(`Ordre gardé pour tous les ${JOURS_LONG[wdOf()]}s ✓`); break; }
+    case "rUp": case "rDown": { const t = tour(sub.id); const arr = etabsRetourGen(t).map(e => e.id); const j = a === "rUp" ? i-1 : i+1; if (j >= 0 && j < arr.length){ [arr[i], arr[j]] = [arr[j], arr[i]]; t.ordreRetour = arr; save(); render(); } break; }
+    case "rReset": { const t = tour(sub.id); snapOrdre(t); delete t.ordreRetour; save(); render(); break; }
+    case "ordreRestore": { const t = tour(sub.id) || S.tournees.find(x => x.id === id); if (t && restaurerOrdre(t)){ save(); render(); toast("Ordre précédent rétabli ✓"); } break; }
+    case "ordreDefaut": { const t = tour(sub.id); if (t){ ordreDefaut(t); save(); render(); toast("Ordre par défaut rétabli (l'ancien ordre reste annulable)"); } break; }
     case "eUp": case "eDown": { const t = tour(sub.id); const j = a === "eUp" ? i-1 : i+1; if (j >= 0 && j < t.etabs.length){ [t.etabs[i], t.etabs[j]] = [t.etabs[j], t.etabs[i]]; linkEtabs(t); save(); render(); } break; }
     case "arrMsg": arrMsgKey = id; arriveSheet(); break;
     case "vcfKid": { const k = S.tournees.flatMap(t => t.enfants).find(x => x.id === id); saveVcf(contactRows().filter(r => r.kidId === id), `contacts-${(k?.prenom || "enfant").replace(/[^\wÀ-ÿ-]/g, "")}.vcf`); break; }
