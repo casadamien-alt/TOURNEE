@@ -155,10 +155,10 @@ const DEFAULT_TPL = {
   devant: "Bonjour, je suis devant chez vous pour {enfant}. {chauffeur}"
 };
 const TPL_LABELS = {
-  avantMatin: "Matin – avant le ramassage",
-  valideMatin: "Matin – enfant pris en charge (étape validée)",
-  avantSoir: "Soir – j'arrive bientôt",
-  valideSoir: "Soir – enfant déposé (étape validée)",
+  avantMatin: "Aller – avant le ramassage",
+  valideMatin: "Aller – enfant pris en charge (étape validée)",
+  avantSoir: "Retour – j'arrive bientôt",
+  valideSoir: "Retour – enfant déposé (étape validée)",
   devant: "« Je suis devant chez vous »"
 };
 function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[], societes:[], depenses:[], depTypes:["Péage","Parking","Lavage"] }; }
@@ -194,10 +194,20 @@ function remplActif(t, dk){
   return (!r.du || dk >= r.du) && (!r.au || dk <= r.au);
 }
 function dFr(dk){ return dk ? dk.split("-").reverse().join("/") : ""; }
-// absences prévues : {id, du, au, sens: "both" | "matin" | "soir", motif}
+// absences prévues : {id, du, au, sens: "both" (toute la journée) | tableau de courses ["matin","midi"] | "matin" | "soir", motif}
+function sessionsOf(s){ return s === "both" ? ["matin","midi","soir"] : Array.isArray(s) ? s : [s]; }
 function absentPrevu(k, dk, sens){
-  return (k.absences||[]).find(x => x.du && dk >= x.du && dk <= (x.au || x.du) && (x.sens === "both" || x.sens === sens)) || null;
+  return (k.absences||[]).find(x => x.du && dk >= x.du && dk <= (x.au || x.du) && sessionsOf(x.sens).includes(sens)) || null;
 }
+// courses prévues par jour : k.plan[0..6] = {matin, midi, soir, hMatin, hMidi, hSoir} (0 = dimanche)
+const JOURS_PLAN = [1,2,3,4,5,6,0];
+function planOf(k){
+  if (k.plan && typeof k.plan === "object") return k.plan;
+  const p = {};   for (let d = 0; d < 7; d++){ const semaine = d >= 1 && d <= 5;   // fiches anciennes : lundi à vendredi seulement, samedi et dimanche décochés
+    p[d] = { matin: semaine && k.matin !== false, midi: semaine && k.midi === true, soir: semaine && k.soir !== false, hMatin: k.heureMatin || "", hMidi: "12:00", hSoir: "" }; }
+  return p;
+}
+function dayPlan(k, dk){ return planOf(k)[new Date((dk || dayKey(new Date())) + "T12:00:00").getDay()] || {}; }
 function altDaysTxt(x, gen){
   const f = arr => (arr||[]).slice().sort().map(d => JOURS_LONG[d]).join(", ");
   const j = [x.matin?.length ? "☀️ matin : " + f(x.matin) + ((x.heureMatin || gen) ? " à " + (x.heureMatin || gen).replace(":", "h") : "") : "", x.soir?.length ? "🌙 soir : " + f(x.soir) : ""].filter(Boolean).join(" · ") || "aucun jour choisi";
@@ -207,7 +217,8 @@ function altDaysTxt(x, gen){
 }
 function absTxt(x){
   const per = x.au && x.au !== x.du ? `du ${dFr(x.du)} au ${dFr(x.au)}` : `le ${dFr(x.du)}`;
-  const tr = x.sens === "matin" ? " · matin" : x.sens === "soir" ? " · soir" : "";
+  const ss = sessionsOf(x.sens);
+  const tr = ss.length >= 3 ? " · toute la journée" : " · " + ss.map(sensNom).join(" + ");
   return per + tr + (x.motif ? " — " + x.motif : "");
 }
 function tour(id){ return S.tournees.find(t => t.id === id); }
@@ -619,9 +630,10 @@ function releaseAwake(){ try { wakeLock?.release(); } catch(e){} wakeLock = null
 /* =========================================================
    Tournée en cours
    ========================================================= */
-function eligible(t, sens){
-  if (sens === "midi") return t.enfants.filter(k => k.midi === true);   // trajet de midi : enfants cochés « Midi »
-  const list = t.enfants.filter(k => sens === "matin" ? k.matin !== false : k.soir !== false);
+function eligible(t, sens, dk){
+  const day = dk || dayKey(new Date());
+  if (sens === "midi") return t.enfants.filter(k => dayPlan(k, day).midi === true);   // trajet de midi : enfants prévus à midi ce jour-là
+  const list = t.enfants.filter(k => dayPlan(k, day)[sens] === true);
   if (sens === "matin") return list;
   const rev = list.slice().reverse();                        // le soir : ordre inverse du matin…
   if (!Array.isArray(t.ordreSoir) || !t.ordreSoir.length) return rev;
@@ -662,7 +674,7 @@ let sim = null;
 function simSheet(){
   const t = tour(sim.id); if (!t){ closeSheet(); return; }
   const dk = sim.date, sens = sim.sens;
-  const sensOpts = [["matin","☀️ Matin"], ...(t.midiOn && t.etabs.length > 1 ? [["midi","🕛 Midi"]] : []), ["soir","🌙 Soir"]];
+  const sensOpts = [["matin","☀️ Aller"], ...(t.midiOn && t.etabs.length > 1 ? [["midi","🕛 Midi"]] : []), ["soir","🌙 Retour"]];
   let h = `<h2>🔍 Tester « ${esc(t.nom)} »</h2>
     <p class="small muted" style="margin-top:0">Aperçu de ce que l'application préparera ce jour-là. Rien n'est lancé ni enregistré.</p>
     <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="sim_date" value="${dk}"></div>
@@ -685,7 +697,7 @@ function simSheet(){
   if (sens === "soir"){ const pk = defaultHeure(t, "soir", dk), am = approachMins(t); h += `<div class="small" style="margin-top:4px">⏰ Récupération à l'établissement : <b>${hTxt(pk)}</b> · départ de chez vous vers <b>${hTxt(minusMin(pk, am))}</b> (trajet estimé ${am} min)</div>`; }
   h += `</div>`;
   // enfants
-  const all = eligible(t, sens);
+  const all = eligible(t, sens, dk);
   const abs = all.filter(k => absentPrevu(k, dk, sens)), pres = all.filter(k => !absentPrevu(k, dk, sens));
   const hors = t.enfants.filter(k => !all.includes(k));
   const kidLine = (k, n) => { const ek = sens === "midi" ? k : effKid(k, dk, sens); const com = sens === "matin" ? k.comMatin : sens === "soir" ? k.comSoir : "";
@@ -724,7 +736,7 @@ function simSheet(){
 }
 function etabRef(a, e){ if (a.sens === "midi") return ""; const h = horaire(e || a.etab, a.start); return a.sens === "soir" ? h.fin : h.debut; }
 function sensIcon(x){ return x === "matin" ? "☀️" : x === "midi" ? "🕛" : "🌙"; }
-function sensNom(x){ return x === "matin" ? "matin" : x === "midi" ? "midi" : "soir"; }
+function sensNom(x){ return x === "matin" ? "aller" : x === "midi" ? "midi" : "retour"; }
 function kidById(a, id){ const st = a.steps.find(x => x.type === "kid" && x.kid.id === id); return st ? st.kid : (a.kidsRef || []).find(k => k.id === id); }
 function SE(s, a){ return (s && s.etab) || a.etab; }   // établissement de l'étape (plusieurs établissements possibles)
 function etabKey(e){ return ((e.nom || "") + "|" + (e.adresse || "")).trim().toLowerCase(); }
@@ -748,6 +760,7 @@ function altFor(k, dk, sens){
 }
 function effKid(k, dk, sens){
   const c = JSON.parse(JSON.stringify(k)); const x = altFor(k, dk, sens);
+  if (sens === "matin" && dayPlan(k, dk).hMatin) c.heureMatin = dayPlan(k, dk).hMatin;   // heure du matin prévue ce jour-là
   if (x){ c.adresse = x.adresse; c.gps = x.gps || ""; c.altLabel = x.libelle || "autre adresse"; c.homeAdresse = k.adresse;
     if (sens === "matin" && x.heureMatin) c.heureMatin = x.heureMatin; }   // heure de ramassage propre à cette adresse
   return c;
@@ -861,7 +874,7 @@ function estDuree(n){
 function gcalStamp(dk, minutes){ const d = new Date(dk+"T00:00:00"); d.setMinutes(minutes); return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+"T"+p2(d.getHours())+p2(d.getMinutes())+"00"; }
 function gcalUrl(n){
   const t = tour(n.tourneeId); const start = toMinutes(n.sens === "soir" && n.depart ? n.depart : n.heure); const dur = estDuree(n);
-  const kids = t ? eligible(t, n.sens) : [];
+  const kids = t ? eligible(t, n.sens, n.date) : [];
   const loc = n.sens === "matin" ? (kids[0]?.adresse || t?.etab.adresse || "") : (t?.etab.adresse || "");
   const details = `Tournée du ${n.sens} – ${t?.etab.nom || ""}\nEnfants : ${kids.map(k => k.prenom).join(", ")}\n\n🔔 Alertes souhaitées : 1 h et 30 min avant.`;
   const p = new URLSearchParams({ action:"TEMPLATE", text:`🚐 Tournée ${n.sens === "matin" ? "du matin" : "du soir"} – ${t?.nom || ""}`,
@@ -885,7 +898,7 @@ function planForm(def){
   openSheet(`<h2>📅 Quand est votre prochaine tournée ?</h2>
     <label class="f">Tournée</label><select class="t" id="pf_t">${S.tournees.map(t => `<option value="${t.id}" ${t.id===tid?"selected":""}>${esc(t.nom)}</option>`).join("")}</select>
     <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="pf_d" value="${def.date}"></div>
-      <div class="grow"><label class="f">Matin ou soir</label><select class="t" id="pf_s"><option value="matin" ${def.sens==="matin"?"selected":""}>☀️ Matin</option><option value="soir" ${def.sens==="soir"?"selected":""}>🌙 Soir</option></select></div></div>
+      <div class="grow"><label class="f">Aller ou retour</label><select class="t" id="pf_s"><option value="matin" ${def.sens==="matin"?"selected":""}>☀️ Matin</option><option value="soir" ${def.sens==="soir"?"selected":""}>🌙 Soir</option></select></div></div>
     <label class="f" id="pf_hl">${def.sens === "soir" ? "Heure de récupération des enfants à l'établissement" : "Heure de départ (premier ramassage)"}</label><input class="t" type="time" id="pf_h" value="${def.heure || defaultHeure(tour(tid), def.sens, def.date)}">
     <div id="pf_depbox" style="${def.sens === "soir" ? "" : "display:none"}"><label class="f">🏠 Début de la tournée (départ de chez vous)</label><input class="t" type="time" id="pf_dep" value="${def.depart || minusMin(def.heure || defaultHeure(tour(tid), "soir", def.date), approachMins(tour(tid)))}"></div>
     <p class="small muted" id="pf_info"></p>
@@ -906,7 +919,7 @@ function updatePlanInfo(recalc){
 function setNext(n){ if (S.next && S.next.event && S.next.date === n.date && S.next.heure === n.heure && (S.next.depart||"") === (n.depart||"")) n.event = S.next.event; S.next = n; save(); render(); agendaSheet(n); }
 function eventData(n){
   const t = tour(n.tourneeId); const st = toMinutes(n.heure); const dur = estDuree(n);
-  const kids = t ? eligible(t, n.sens) : [];
+  const kids = t ? eligible(t, n.sens, n.date) : [];
   const iso = m => { const d = new Date(n.date+"T00:00:00"); d.setMinutes(m); return d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+"T"+p2(d.getHours())+":"+p2(d.getMinutes())+":00"; };
   return {
     summary: n.sens === "soir" ? `🚐 Tournée du soir – ${n.depart ? "départ " + hTxt(n.depart) + " · " : ""}récupération ${hTxt(n.heure)} – ${t?.nom || ""}` : `🚐 Tournée ${n.sens === "midi" ? "du midi" : "du matin"} – ${t?.nom || ""}`,
@@ -1351,13 +1364,13 @@ function orderSheet(){
   const etabsUsed = t.etabs.filter(e => kidsM.some(k => kidEtab(t, k).id === e.id));
   openSheet(`<h2>🗺️ Ordre des étapes</h2>
     <p class="small muted" style="margin-top:0">Vérifiez l'ordre de la tournée avant de valider. Vous pourrez toujours le changer plus tard.</p>
-    <div class="card"><h3>☀️ Matin — 1. Ramassages</h3>
+    <div class="card"><h3>☀️ Aller — 1. Ramassages</h3>
       ${kidsM.map((k, i) => row(esc(kidName(k)), "🏫 " + esc(kidEtab(t, k).nom || "Établissement"), t.enfants.indexOf(k), t.enfants.length, "so", "var(--ink)")).join("") || `<p class="small muted">Aucun enfant le matin.</p>`}
     </div>
-    <div class="card"><h3>☀️ Matin — 2. Établissements</h3>
+    <div class="card"><h3>☀️ Aller — 2. Établissements</h3>
       ${t.etabs.map((e, i) => row("🏫 " + esc(e.nom || "Établissement " + (i+1)), "Déposer : " + (kidsM.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "personne"), i, t.etabs.length, "soE", "var(--brand-ink)")).join("")}
     </div>
-    <div class="card" style="background:var(--night-soft)"><h3>🌙 Soir</h3>
+    <div class="card" style="background:var(--night-soft)"><h3>🌙 Retour</h3>
       <p class="small" style="margin:0">${etabsUsed.length ? "Établissements : " + t.etabs.slice().reverse().filter(e => t.enfants.some(k => k.soir !== false && kidEtab(t, k).id === e.id)).map(e => esc(e.nom || "Établissement")).join(" → ") + "<br>" : ""}Puis dépôts : ${eligible(t, "soir").map(k => esc(k.prenom)).join(" → ") || "personne"}</p>
       <p class="small muted" style="margin:6px 0 0">${Array.isArray(t.ordreSoir) && t.ordreSoir.length ? "Ordre du soir personnalisé (modifiable dans la fiche)." : "Ordre inverse du matin (modifiable dans la fiche : « Ordre de dépôt du soir »)."}</p>
     </div>
@@ -1485,7 +1498,7 @@ function repFile(ext){
 }
 function repRows(items){
   return items.map(e => { const d = new Date(e.start); return {
-    date: `${JOURS[d.getDay()]} ${dFr(e.date)}`, tournee: e.tourneeNom || "", trajet: e.sens === "matin" ? "Matin" : e.sens === "midi" ? "Midi" : "Soir",
+    date: `${JOURS[d.getDay()]} ${dFr(e.date)}`, tournee: e.tourneeNom || "", trajet: e.sens === "matin" ? "Aller" : e.sens === "midi" ? "Midi" : "Retour",
     depart: hm(e.start), arrivee: hm(e.end), duree: durTxt(e.duree||0), nb: String(e.nb ?? ""), absents: (e.absents||[]).join(", ") || "—" }; });
 }
 function repMeta(items){
@@ -1550,11 +1563,8 @@ function runEtablissements(e){
   return [...new Set(l.length ? l : (e.etab ? e.etab.split(", ") : []))];
 }
 function hmDur(min){ min = Math.max(0, Math.round(min || 0)); return `${Math.floor(min / 60)} h ${p2(min % 60)}`; }
-// moment de la journée d'après l'heure de départ : matin avant 11 h 30, midi avant 14 h 30, soir ensuite
-function momentJournee(iso){
-  const h = new Date(iso); const m = h.getHours() * 60 + h.getMinutes();
-  return m < 11*60 + 30 ? "matin" : m < 14*60 + 30 ? "midi" : "soir";
-}
+// libellé du moment de la journée : aller, midi ou retour
+function momentJournee(sens){ return sensNom(sens); }   // aller, midi ou retour, selon le type de course
 function repDepRows(){
   const inP = repInSel;
   const fu = repPleins().map(p => ({ k: p.date + (p.heure || ""), cells: [dFr(p.date), "Carburant" + (p.carburant ? " " + p.carburant : ""),
@@ -1587,7 +1597,7 @@ function pointPdf(){
   };
   const rowsData = items.map(e => {
     const d = new Date(e.start); const ml = motifLayout(e);
-    return { cells: [`${JOURS_LONG[d.getDay()]} — ${momentJournee(e.start)}`, dFr(e.date), hm(e.start), hm(e.end), hmDur(e.duree)], ml, h: Math.max(RH, ml.length * LH + 12) };
+    return { cells: [`${JOURS_LONG[d.getDay()]} — ${momentJournee(e.sens)}`, dFr(e.date), hm(e.start), hm(e.end), hmDur(e.duree)], ml, h: Math.max(RH, ml.length * LH + 12) };
   });
   const tot = items.reduce((a, e) => a + (e.duree || 0), 0);
   const minH = 12 * RH;   // lignes vides comme sur le modèle papier
@@ -2610,8 +2620,7 @@ function drawKidForm(){
     ${(() => { const t = tour(sub.id); return t.etabs.length > 1 ? `<label class="f">🏫 Établissement</label><select class="t" id="k_etab">${t.etabs.map(x => `<option value="${x.id}" ${x.id === (e.etabId || t.etabs[0].id) ? "selected" : ""}>${esc(x.nom || "Établissement sans nom")}</option>`).join("")}</select>` : ""; })()}
     <label class="f">Adresse complète (rue, code postal, ville)</label>${addrField('id="k_adresse"', e.adresse, "12 rue des Lilas, 69003 Lyon")}
     ${gpsField('id="k_gps"', e.gps)}
-    <div class="row"><div class="grow"><label class="f">Heure de ramassage le matin</label><input class="t" type="time" id="k_heure" value="${esc(e.heureMatin)}"></div>
-      <div class="grow"><label class="f">Transporté</label><div class="row" style="padding:8px 0"><label class="row"><input type="checkbox" id="k_matin" ${e.matin!==false?"checked":""}> Matin</label>${tour(sub.id)?.midiOn ? `<label class="row" style="margin-left:10px"><input type="checkbox" id="k_midi" ${e.midi===true?"checked":""}> Midi</label>` : ""}<label class="row" style="margin-left:10px"><input type="checkbox" id="k_soir" ${e.soir!==false?"checked":""}> Soir</label></div></div></div>
+    ${planGridHtml(e)}
     ${(() => { const t = tour(sub.id); if (!t?.midiOn) return "";
       const def = t.etabs.find(x => x.id === t.midiDest) || t.etabs[t.etabs.length - 1];
       return `<div class="card" style="padding:10px;background:#f3faf6;border-color:#bfe3d2"><label class="f" style="margin-top:0">🕛 Le midi, je dépose cet enfant :</label>
@@ -2619,8 +2628,8 @@ function drawKidForm(){
         <div id="k_madrbox" style="${e.midiDest === "adr" ? "" : "display:none"}"><label class="f">Nom du lieu</label><input class="t" id="k_mlib" value="${esc(e.midiLib || "")}" placeholder="ex. Chez sa grand-mère">
           <label class="f">Adresse</label>${addrField('id="k_madr"', e.midiAdr || "", "Rue, code postal, ville")}</div>
         <p class="small muted" style="margin:6px 0 0">Valable seulement si « Midi » est coché ci-dessus.</p></div>`; })()}
-    <label class="f">☀️ Mode de ramassage le matin</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
-    <label class="f">🌙 Mode de dépôt le soir</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
+    <label class="f">☀️ Mode de ramassage à l'aller</label><textarea class="t" id="k_comMatin" placeholder="ex. attendre devant le portail, sonner à l'interphone, fauteuil…">${esc(e.comMatin)}</textarea>
+    <label class="f">🌙 Mode de dépôt au retour</label><textarea class="t" id="k_comSoir" placeholder="ex. remettre uniquement à la mère ; le mercredi chez la grand-mère…">${esc(e.comSoir)}</textarea>
     <label class="f">📝 Autre information (santé, comportement…)</label><input class="t" id="k_note" value="${esc(e.note)}">
     <h3 style="margin-top:16px">🏠 Autres adresses selon le jour</h3>
     <div id="altList">${(e.altAdr||[]).map(x => `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><b class="grow">🏠 ${esc(x.libelle || "Autre adresse")}</b>${x.alterne ? `<button class="btn sm" data-act="altFlip" data-id="${x.id}" title="Inverser semaine A / semaine B">⇄ Inverser les semaines</button>` : ""}<button class="btn sm" data-act="altEdit" data-id="${x.id}">✏️</button><button class="btn sm danger" data-act="delAlt" data-id="${x.id}">✖</button></div>
@@ -2636,12 +2645,13 @@ function drawKidForm(){
         <label class="row" style="margin:4px 0"><input type="radio" name="alt_wk" value="alt" ${ea?.alterne ? "checked" : ""}> Une semaine sur deux, dont la semaine du
           <input class="t" type="date" id="alt_ref" value="${ea?.alterne ? mondayOf(ea.alterne) : mondayOf(dayKey(new Date()))}" style="width:auto;padding:6px"></label>
         <label class="f">☀️ Ramassage ici le matin, le : <a href="#" class="small" data-act="altAll" data-id="altm">tous</a></label>
-        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-altm="${d}" ${on("matin", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <p class="small muted" style="margin:0 0 4px">Seuls les jours cochés dans « Courses par jour » peuvent être choisis.</p>
+        <div class="row">${[1,2,3,4,5,6].map(d => { const ok = gridDays(e,"matin").includes(d); return `<label class="row" style="gap:4px;${ok ? "" : "opacity:.45"}"><input type="checkbox" data-altm="${d}" ${on("matin", d)} ${ok || on("matin", d) ? "" : "disabled"}> ${JOURS_LONG[d].slice(0,3)}.</label>`; }).join("")}</div>
         <label class="f">⏰ Heure de ramassage le matin à cette adresse</label>
         <input class="t" type="time" id="alt_heure" data-gen="${esc(e.heureMatin || "")}" value="${esc(ea?.heureMatin || e.heureMatin || "")}" style="max-width:180px">
         <p class="small muted" style="margin:4px 0 0">${e.heureMatin ? `Par défaut, l'heure générale de l'enfant (${e.heureMatin.replace(":", "h")}). Changez-la si cette adresse est plus près ou plus loin de l'établissement.` : "Indiquez d'abord l'heure de ramassage générale en haut de la fiche : elle sera reprise ici par défaut."}</p>
         <label class="f">🌙 Dépôt ici le soir, le : <a href="#" class="small" data-act="altAll" data-id="alts">tous</a></label>
-        <div class="row">${[1,2,3,4,5,6].map(d => `<label class="row" style="gap:4px"><input type="checkbox" data-alts="${d}" ${on("soir", d)}> ${JOURS_LONG[d].slice(0,3)}.</label>`).join("")}</div>
+        <div class="row">${[1,2,3,4,5,6].map(d => { const ok = gridDays(e,"soir").includes(d); return `<label class="row" style="gap:4px;${ok ? "" : "opacity:.45"}"><input type="checkbox" data-alts="${d}" ${on("soir", d)} ${ok || on("soir", d) ? "" : "disabled"}> ${JOURS_LONG[d].slice(0,3)}.</label>`; }).join("")}</div>
         <button class="btn go w100" style="margin-top:10px" data-act="addAlt">${ea ? "✔ Enregistrer les modifications de cette adresse" : "Ajouter cette adresse"}</button>
         ${ea ? `<button class="btn w100" style="margin-top:6px" data-act="altCancel">Annuler la modification</button>` : ""}
       </div></details>`; })()}
@@ -2651,7 +2661,9 @@ function drawKidForm(){
       <div class="card" style="margin-top:8px;padding:10px">
         <div class="row"><div class="grow"><label class="f">Le (ou du)</label><input class="t" type="date" id="ab_du" value="${dayKey(new Date())}"></div>
           <div class="grow"><label class="f">Au (facultatif)</label><input class="t" type="date" id="ab_au"></div></div>
-        <label class="f">Tournée</label><select class="t" id="ab_sens"><option value="both">☀️🌙 Matin et soir</option><option value="matin">☀️ Matin seulement</option><option value="soir">🌙 Soir seulement</option></select>
+        <label class="f">Courses concernées</label>
+        <div class="row"><label class="row"><input type="checkbox" data-abs="matin" checked> ☀️ Aller</label>${tour(sub.id)?.midiOn ? `<label class="row" style="margin-left:10px"><input type="checkbox" data-abs="midi" checked> 🕛 Midi</label>` : ""}<label class="row" style="margin-left:10px"><input type="checkbox" data-abs="soir" checked> 🌙 Retour</label></div>
+        <p class="small muted" style="margin:4px 0 0">Décochez une course pour une absence partielle ; toutes cochées = toute la journée.</p>
         <label class="f">Motif (facultatif)</label><input class="t" id="ab_motif" placeholder="ex. rendez-vous médical, chez son père…">
         <button class="btn go w100" style="margin-top:10px" data-act="addAbs">Ajouter l'absence</button>
       </div></details>
@@ -2661,14 +2673,47 @@ function drawKidForm(){
     <div class="row" style="margin-top:18px"><button class="btn primary grow" data-act="saveKid">Enregistrer</button><button class="btn" data-act="close">Annuler</button></div>
     ${editKidIndex >= 0 ? `<button class="btn danger" style="margin-top:14px" data-act="delKid">🗑 Retirer cet enfant de la tournée</button>` : ""}`);
 }
+function planGridHtml(e){
+  const t = tour(sub.id); const p = planOf(e);
+  const cell = (d, s, lab) => { const c = p[d] || {}; const hk = { matin:"hMatin", midi:"hMidi", soir:"hSoir" }[s];
+    const hr = c[hk] || (s === "midi" ? "12:00" : "");
+    return `<div><label class="row" style="gap:4px;font-size:14px"><input type="checkbox" data-pc="${d}-${s}" ${c[s] === true ? "checked" : ""}> ${lab}</label>
+      <input class="t" type="time" data-ph="${d}-${s}" value="${esc(hr)}" style="padding:6px;font-size:15px;margin-top:4px"></div>`; };
+  const rows = JOURS_PLAN.map(d => `<div style="display:grid;grid-template-columns:48px repeat(3,1fr);gap:6px;align-items:start;padding:6px 0;border-bottom:1px solid var(--line)">
+    <b style="padding-top:6px">${JOURS_LONG[d].slice(0,3)}.</b>${cell(d,"matin","☀️ Aller")}${t?.midiOn ? cell(d,"midi","🕛 Midi") : "<div></div>"}${cell(d,"soir","🌙 Retour")}</div>`).join("");
+  return `<h3 style="margin-top:12px">🗓️ Courses par jour</h3>
+    <p class="small muted" style="margin:0 0 4px">Cochez les courses prises chaque jour. Pour une course cochée, indiquez son heure (midi : 12 h par défaut).</p>
+    <div>${rows}</div>`;
+}
+// jours où la grille générale prévoit une course (matin ou soir) : seuls ces jours peuvent porter une adresse alternative
+function gridDays(e, s){ const p = e.plan || planOf(e); return JOURS_PLAN.filter(d => p[d]?.[s] === true); }
+function readPlan(e){
+  const plan = {}; const old = planOf(e);
+  JOURS_PLAN.forEach(d => {
+    const c = {};
+    SESS.forEach(s => {
+      const cb = document.querySelector(`[data-pc="${d}-${s}"]`);
+      c[s] = cb ? cb.checked : old[d]?.[s] === true;    // midi absent si le trajet de midi n'est pas activé
+      const hk = { matin:"hMatin", midi:"hMidi", soir:"hSoir" }[s];
+      c[hk] = document.querySelector(`[data-ph="${d}-${s}"]`)?.value || (s === "midi" ? "12:00" : "");
+    });
+    plan[d] = c;
+  });
+  return plan;
+}
+const SESS = ["matin","midi","soir"];
 function readKidForm(){
   const g = id => document.getElementById(id)?.value.trim() ?? "";
   const e = editKid;
   e.prenom = g("k_prenom"); e.nom = g("k_nom"); e.adresse = g("k_adresse"); e.gps = g("k_gps");
-  if (document.getElementById("k_etab")) e.etabId = document.getElementById("k_etab").value; e.heureMatin = g("k_heure");
+  if (document.getElementById("k_etab")) e.etabId = document.getElementById("k_etab").value;
   e.comMatin = g("k_comMatin"); e.comSoir = g("k_comSoir"); e.note = g("k_note");
-  e.matin = document.getElementById("k_matin").checked; e.soir = document.getElementById("k_soir").checked;
-  if (document.getElementById("k_midi")) e.midi = document.getElementById("k_midi").checked;
+  e.plan = readPlan(e);
+  // indicateurs « tous les jours » recalculés à partir de la grille (pour les anciens écrans et l'affichage)
+  const any = s => JOURS_PLAN.some(d => e.plan[d][s]);
+  e.matin = any("matin"); e.soir = any("soir"); e.midi = any("midi");
+  const first = JOURS_PLAN.find(d => e.plan[d].matin && e.plan[d].hMatin);
+  e.heureMatin = first !== undefined ? e.plan[first].hMatin : "";
   if (document.getElementById("k_mdest")){ e.midiDest = document.getElementById("k_mdest").value; e.midiLib = g("k_mlib"); e.midiAdr = g("k_madr"); }
   e.contacts = [...document.querySelectorAll("#contacts [data-ci]")].map(r => ({
     nom: r.querySelector("[data-c=nom]").value.trim(),
@@ -2679,6 +2724,11 @@ function readKidForm(){
 function saveKid(){
   readKidForm(); const e = editKid;
   if (!e.prenom){ toast("Le prénom est obligatoire"); return; }
+  { const bad = []; (e.altAdr||[]).forEach(x => [["matin","matin"],["soir","soir"]].forEach(([k, s]) => (x[k]||[]).forEach(d => { if (!gridDays(e, s).includes(d)) bad.push(`« ${x.libelle || "Autre adresse"} » : ${JOURS_LONG[d]} ${s} non coché dans « Courses par jour »`); })));
+    if (bad.length){ toast(bad[0] + (bad.length > 1 ? ` (+${bad.length-1})` : "")); return; } }
+  for (const d of JOURS_PLAN){ const c = e.plan[d];
+    if (c.matin && !c.hMatin){ toast(`Indiquez l'heure de ramassage du matin (${JOURS_LONG[d]})`); return; }
+    if (c.soir && !c.hSoir){ toast(`Indiquez l'heure du soir (${JOURS_LONG[d]})`); return; } }
   e.contacts = e.contacts.filter(c => c.nom || c.tel);
   const lim = dayKey(new Date(Date.now() - 30*864e5)); e.absences = (e.absences||[]).filter(x => (x.au || x.du) >= lim);
   const t = tour(sub.id);
@@ -3016,6 +3066,8 @@ document.addEventListener("click", e => {
     case "editKid": kidForm(i); break;
     case "saveKid": saveKid(); break;
     case "addAlt": { readKidForm(); const adr = document.getElementById("alt_adr").value.trim();
+      { const bad = [["matin","altm"],["soir","alts"]].flatMap(([s, ds]) => [...document.querySelectorAll(`[data-${ds}]:checked`)].map(c => Number(c.dataset[ds])).filter(d => !gridDays(editKid, s).includes(d)).map(d => `${JOURS_LONG[d]} ${s}`));
+        if (bad.length){ toast("Non prévu dans « Courses par jour » : " + bad.join(", ")); break; } }
       const m = [...document.querySelectorAll("[data-altm]:checked")].map(c => Number(c.dataset.altm));
       const so = [...document.querySelectorAll("[data-alts]:checked")].map(c => Number(c.dataset.alts));
       if (!adr){ toast("Indiquez l'adresse"); break; } if (!m.length && !so.length){ toast("Cochez au moins un jour"); break; }
@@ -3026,12 +3078,15 @@ document.addEventListener("click", e => {
       altEditId = null; drawKidForm(); toast((wasEdit ? "Adresse modifiée" : "Adresse ajoutée") + " — pensez à Enregistrer"); break; }
     case "altEdit": readKidForm(); altEditId = id; drawKidForm(); setTimeout(() => document.getElementById("alt_lib")?.scrollIntoView({ block:"center" }), 50); break;
     case "altCancel": readKidForm(); altEditId = null; drawKidForm(); break;
-    case "altAll": { e.preventDefault(); const boxes = [...document.querySelectorAll(`[data-${id}]`)].filter(c => Number(c.dataset[id]) <= 5); const on = !boxes.every(c => c.checked); boxes.forEach(c => c.checked = on); break; }
+    case "altAll": { e.preventDefault(); const boxes = [...document.querySelectorAll(`[data-${id}]`)].filter(c => Number(c.dataset[id]) <= 5 && !c.disabled); const on = !boxes.every(c => c.checked); boxes.forEach(c => c.checked = on); break; }
     case "altFlip": { readKidForm(); const x = (editKid.altAdr||[]).find(y => y.id === id); if (x && x.alterne){ x.alterne = addDays(mondayOf(x.alterne), 7); drawKidForm(); toast(altWeekOn(x, dayKey(new Date())) ? "Inversé : cette adresse vaut maintenant CETTE semaine — pensez à Enregistrer" : "Inversé : cette adresse vaudra la SEMAINE PROCHAINE — pensez à Enregistrer"); } break; }
     case "delAlt": readKidForm(); editKid.altAdr = (editKid.altAdr||[]).filter(x => x.id !== id); if (altEditId === id) altEditId = null; drawKidForm(); break;
     case "addAbs": { readKidForm(); const du = document.getElementById("ab_du").value; let au = document.getElementById("ab_au").value;
       if (!du){ toast("Indiquez la date"); break; } if (au && au < du) au = "";
-      editKid.absences = [...(editKid.absences||[]), { id: uid(), du, au: au && au !== du ? au : "", sens: document.getElementById("ab_sens").value, motif: document.getElementById("ab_motif").value.trim() }];
+      const boxes = [...document.querySelectorAll("[data-abs]")]; const picked = boxes.filter(c => c.checked).map(c => c.dataset.abs);
+      if (!picked.length){ toast("Cochez au moins une course"); break; }
+      const sens = picked.length === boxes.length ? "both" : picked;
+      editKid.absences = [...(editKid.absences||[]), { id: uid(), du, au: au && au !== du ? au : "", sens, motif: document.getElementById("ab_motif").value.trim() }];
       drawKidForm(); toast("Absence ajoutée — pensez à Enregistrer"); break; }
     case "delAbs": readKidForm(); editKid.absences = (editKid.absences||[]).filter(x => x.id !== id); drawKidForm(); break;
     case "addContact": readKidForm(); editKid.contacts.push({nom:"",lien:"",tel:"",type:"Portable"}); drawKidForm(); setTimeout(() => { const r = document.querySelectorAll("#contacts [data-ci]"); r[r.length-1]?.scrollIntoView({block:"center"}); r[r.length-1]?.querySelector("[data-c=lien]")?.focus(); }, 50); break;
