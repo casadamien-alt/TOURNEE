@@ -161,7 +161,7 @@ const TPL_LABELS = {
   valideSoir: "Soir – enfant déposé (étape validée)",
   devant: "« Je suis devant chez vous »"
 };
-function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[], societes:[] }; }
+function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournees:[], active:null, next:null, domicile:"", pleins:[], vehicules:[], societes:[], depenses:[], depTypes:["Péage","Parking","Lavage"] }; }
 
 let S = blankState();
 let H = {};                 // historique : { "2026-11": [entrées] }
@@ -282,6 +282,8 @@ function normalize(st){
   }
   delete st.employeur;
   st.societes.forEach(c => { c.sites = Array.isArray(c.sites) ? c.sites : []; });
+  st.depenses = Array.isArray(st.depenses) ? st.depenses : [];
+  st.depTypes = Array.isArray(st.depTypes) && st.depTypes.length ? st.depTypes : ["Péage", "Parking", "Lavage"];
   st.pleins = Array.isArray(st.pleins) ? st.pleins : []; st.vehicules = Array.isArray(st.vehicules) ? st.vehicules : [];   // mode Android Auto retiré : navigation étape par étape
   st.tournees = (st.tournees||[]).map(t => ({ id:t.id||uid(), nom:t.nom||"Tournée", multi: t.multi, pause: !!t.pause, dateUnique: t.dateUnique || "", midiOn: !!t.midiOn, midiDest: t.midiDest || "",
     responsable: Object.assign({nom:"",fonction:"",tel:"",email:""}, t.responsable||{}),
@@ -1901,16 +1903,20 @@ function renderCarbu(){
   const items = pleinsDuMois(carbuMonth);
   const tot = items.reduce((a, p) => a + (p.montant || 0), 0), lit = items.reduce((a, p) => a + (p.litres || 0), 0);
   const waiting = (S.pleins || []).filter(p => p.photo && !p.photoDrive).length;
-  let h = `<label class="btn go lg w100" style="margin-bottom:8px">📷 Photographier un reçu<input type="file" accept="image/*" capture="environment" id="carbuCam" style="display:none"></label>
+  let h = `<a class="btn w100" style="margin-bottom:8px" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("TotalEnergies station essence")}">🔍 Chercher une station Total sur Google Maps</a>
+    <label class="btn go lg w100" style="margin-bottom:8px">📷 Photographier un reçu<input type="file" accept="image/*" capture="environment" id="carbuCam" style="display:none"></label>
     <div class="row" style="margin-bottom:12px">
       <label class="btn grow">🖼️ Photo déjà prise<input type="file" accept="image/*" id="carbuGal" style="display:none"></label>
       <button class="btn grow" data-act="plNew">✍️ Sans photo</button></div>
+    <button class="btn w100" style="margin-bottom:12px" data-act="depNew">🧾 Autre dépense (péage, parking…)</button>
     <div class="row" style="margin-bottom:12px"><select class="t grow" id="carbuMonth">${months.map(mk => `<option value="${mk}" ${mk === carbuMonth ? "selected" : ""}>${moisTxt(mk)}</option>`).join("")}</select>
       <button class="btn" data-act="carbuReport" ${(S.pleins || []).length ? "" : "disabled"}>📄 Relevé</button></div>
-    <div class="tot"><div><span class="small muted">Pleins</span><b>${items.length}</b></div><div><span class="small muted">Litres</span><b>${fmtN(lit, 1) || "0"}</b></div><div><span class="small muted">Total</span><b>${eur(tot)}</b></div></div>`;
+    <div class="tot"><div><span class="small muted">Pleins</span><b>${items.length}</b></div><div><span class="small muted">Litres</span><b>${fmtN(lit, 1) || "0"}</b></div><div><span class="small muted">Total carburant</span><b>${eur(tot)}</b></div></div>`;
   if (hasDrive() && waiting && photoScriptOld) h += `<div class="card small" style="border-color:var(--warn)">📱 ${waiting} photo${waiting > 1 ? "s" : ""} de reçu reste${waiting > 1 ? "nt" : ""} sur ce téléphone : le programme Google doit être mis à jour pour les ranger dans votre Drive (voir le guide).</div>`;
-  if (!items.length) h += `<div class="card empty muted"><div class="big">⛽</div>Aucun plein enregistré ce mois-ci.<br><span class="small">Après chaque plein, photographiez le ticket : l'application lit le montant, les litres, le prix au litre, la date, la station et le carburant.</span></div>`;
-  items.forEach(p => {
+  if (!items.length && !depItems.length) h += `<div class="card empty muted"><div class="big">⛽</div>Aucun plein enregistré ce mois-ci.<br><span class="small">Après chaque plein, photographiez le ticket : l'application lit le montant, les litres, le prix au litre, la date, la station et le carburant.</span></div>`;
+  const depItems = depensesDuMois(carbuMonth);
+  const merged = [...items.map(p => ({ k: "p", d: (p.date || "") + (p.heure || ""), p })), ...depItems.map(x => ({ k: "d", d: (x.date || "") + (x.heure || ""), x }))].sort((a, b) => b.d.localeCompare(a.d));
+  merged.forEach(m => { if (m.k === "d"){ h += depCard(m.x); return; } const p = m.p;
     const c = conso(p);
     h += `<div class="card hist" data-act="plOpen" data-id="${p.id}" style="cursor:pointer">
       <span style="font-size:24px">${p.photo ? "🧾" : "⛽"}</span>
@@ -1920,6 +1926,46 @@ function renderCarbu(){
       <span class="dur">${eur(p.montant)}</span></div>`;
   });
   return h;
+}
+/* ---------- 🧾 Autres dépenses (péage, parking, lavage…) ---------- */
+let dp = null;   // dépense en cours : { id, isNew, draft }
+function depensesDuMois(mk){ return (S.depenses || []).filter(x => (x.date || "").slice(0, 7) === mk).sort((a, b) => (b.date + (b.heure || "")).localeCompare(a.date + (a.heure || ""))); }
+function depCard(x){
+  return `<div class="card hist" data-act="depOpen" data-id="${x.id}" style="cursor:pointer">
+    <span style="font-size:24px">🧾</span>
+    <div class="grow"><div style="font-weight:900">${esc(x.type || "Dépense")}${x.libelle ? ` · <span class="muted">${esc(x.libelle)}</span>` : ""}</div>
+      <div class="small muted">${x.date ? `${JOURS[new Date(x.date + "T12:00").getDay()]} ${dFr(x.date)}` : ""}${x.heure ? " " + hTxt(x.heure) : ""}${x.vehicule ? " · 🚐 " + esc(x.vehicule) : ""}</div>
+      ${x.note ? `<div class="small muted">${esc(x.note)}</div>` : ""}</div>
+    <span class="dur">${eur(x.montant)}</span></div>`;
+}
+function depSheet(x){
+  const types = [...new Set([...(S.depTypes || []), ...(S.depenses || []).map(d => d.type).filter(Boolean)])];
+  const veh = (S.vehicules || []).map(v => v.nom).filter(Boolean);
+  openSheet(`<h2>🧾 ${dp.isNew ? "Nouvelle dépense" : "Modifier la dépense"}</h2>
+    <label class="f">Type de dépense</label><input class="t" id="dp_type" list="dpTypes" value="${esc(x.type || "")}" placeholder="ex. Péage, Parking, Lavage…">
+    <datalist id="dpTypes">${types.map(t => `<option value="${esc(t)}">`).join("")}</datalist>
+    <p class="small muted" style="margin:4px 0 0">Un nouveau type tapé ici est retenu pour la prochaine fois.</p>
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="dp_date" value="${esc(x.date || dayKey(new Date()))}"></div>
+      <div class="grow"><label class="f">Heure</label><input class="t" type="time" id="dp_heure" value="${esc(x.heure || "")}"></div></div>
+    <label class="f">Lieu ou libellé</label><input class="t" id="dp_lib" value="${esc(x.libelle || "")}" placeholder="ex. A75 Gerzat, parking gare…">
+    <label class="f">Montant payé (€)</label><input class="t" id="dp_montant" inputmode="decimal" value="${fmtN(x.montant, 2)}" placeholder="ex. 4,20" style="font-size:20px;font-weight:900">
+    <label class="f">Véhicule</label><input class="t" id="dp_veh" list="dpVehs" value="${esc(x.vehicule || "")}" placeholder="facultatif">
+    <datalist id="dpVehs">${veh.map(v => `<option value="${esc(v)}">`).join("")}</datalist>
+    <label class="f">Remarque</label><input class="t" id="dp_note" value="${esc(x.note || "")}" placeholder="facultatif">
+    <button class="btn go lg" style="margin-top:14px" data-act="depSave">✓ Enregistrer</button>
+    ${dp.isNew ? "" : `<button class="btn sm danger" style="margin-top:10px" data-act="depDel">🗑 Supprimer cette dépense</button>`}
+    <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
+}
+function depSave(){
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  const type = g("dp_type") || "Autre";
+  const x = dp.draft;
+  Object.assign(x, { type, date: g("dp_date") || dayKey(new Date()), heure: g("dp_heure"), libelle: g("dp_lib"), montant: numFr(g("dp_montant")), vehicule: g("dp_veh"), note: g("dp_note") });
+  if (!S.depTypes.some(t => t.toLowerCase() === type.toLowerCase())) S.depTypes.push(type);
+  if (dp.isNew){ S.depenses = S.depenses || []; S.depenses.push(x); }
+  else { const j = S.depenses.findIndex(d => d.id === x.id); if (j >= 0) S.depenses[j] = x; }
+  save(); carbuMonth = (x.date || "").slice(0, 7) || carbuMonth;
+  dp = null; closeSheet(); render(); toast("Dépense enregistrée ✓");
 }
 function lastPlein(){ return (S.pleins || []).slice().sort((a, b) => (b.date + (b.heure || "")).localeCompare(a.date + (a.heure || "")))[0]; }
 function plSheet(p){
@@ -2734,6 +2780,11 @@ document.addEventListener("click", e => {
   const i = Number(el.dataset.i), id = el.dataset.id;
   switch (a){
     case "close": closeSheet(); break;
+    case "depNew": dp = { isNew: true, draft: { id: uid(), type: "", date: dayKey(new Date()), heure: "", libelle: "", montant: null, vehicule: (lastPlein()?.vehicule || ""), note: "" } }; depSheet(dp.draft); break;
+    case "depOpen": { const x = (S.depenses || []).find(d => d.id === id); if (x){ dp = { isNew: false, draft: JSON.parse(JSON.stringify(x)) }; depSheet(dp.draft); } break; }
+    case "depSave": depSave(); break;
+    case "depDel": if (el.dataset.ok !== "1"){ el.dataset.ok = "1"; el.textContent = "Confirmer la suppression ?"; break; }
+      S.depenses = S.depenses.filter(d => d.id !== dp.draft.id); save(); dp = null; closeSheet(); render(); toast("Dépense supprimée"); break;
     case "plNew": pl = { id: null, isNew: true }; { const p = newPlein(); pl.id = p.id; pl.draft = p; plSheet(p); } break;
     case "plOpen": plOpen(id); break;
     case "plSave": plSave(); break;
