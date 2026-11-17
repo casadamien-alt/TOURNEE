@@ -24,7 +24,8 @@ Application web d'un chauffeur de transport scolaire (remplacements). Utilisée 
 ## Grandes fonctions (chercher le nom dans index.html)
 - Tournée en cours : `startRun`, `startMidi`, `effKid` (adresse et heure selon le jour), `nextTarget`, `validateBtn`, `pickupSheet`, `skipSheet`, `arriveSheet` (arrivée détectée par GPS).
 - Planification : `proposalHtml`, `planForm`, `setNext`, `defaultHeure`, `approachMins`, `agendaViaScript`.
-- Relevés : `reportSheet`, `makePdf` (écrit le PDF à la main), `makePng`, `repText`. Le relevé inclut une rubrique Carburant (`repPleins`, `fuelRows`).
+- Relevés : `reportSheet`, `makePdf` (écrit le PDF à la main), `makePng`, `repText`.
+- Pointage mensuel (tableau à signer, PDF paysage) : `pointageSheet`, `pointPdf`, titre dans `PTG_TITRE`. Le relevé inclut une rubrique Carburant (`repPleins`, `fuelRows`).
 - Familles et contacts : `renderFamilles`, `contactRows`, `saveVcf`.
 - Carburant : `renderCarbu`, `plSheet`, `plFromFile`, `runOcr` (Tesseract.js chargé depuis jsDelivr), `parseRecu`, `uploadPhotos`, `crepPdf`.
 - Les clics passent par un seul gestionnaire avec des `data-act="..."` (chercher `case "nomAction"`).

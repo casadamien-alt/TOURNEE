@@ -1522,9 +1522,83 @@ function reportSheet(){
     <div class="row" style="margin-top:4px">
       <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length||fu.length?"":"disabled"}>📄 Fichier PDF</button>
       <button class="btn grow" style="padding:14px" data-act="repPng" ${items.length||fu.length?"":"disabled"}>🖼️ Image</button></div>
+    <button class="btn w100" style="margin-top:8px" data-act="pointOpen" ${items.length?"":"disabled"}>📋 Pointage mensuel (tableau à signer)</button>
     <button class="btn w100" style="margin-top:8px" data-act="repText" ${items.length||fu.length?"":"disabled"}>📋 Copier en texte (pour un e-mail)</button>
     <p class="small muted">Le relevé indique pour chaque tournée : le jour, le trajet, l'heure de départ et d'arrivée, la durée, le nombre d'enfants et les enfants absents, puis les pleins de carburant de la période. Vous pourrez ensuite l'envoyer par e-mail ou par message.</p>
     <button class="btn w100" data-act="close">Fermer</button>`);
+}
+/* ---------- 📋 Pointage mensuel des heures (tableau à signer, paysage A4) ---------- */
+const PTG_TITRE = "Pointage mensuel des heures 2026-2027";
+function pointageSheet(){
+  const items = repEntries(), tot = items.reduce((a, e) => a + (e.duree || 0), 0);
+  openSheet(`<h2>📋 Pointage mensuel</h2>
+    <p class="small muted" style="margin-top:0">Même période que le relevé : ${esc(repPeriode())}.</p>
+    <label class="f">Conducteur</label><input class="t" id="ptg_nom" value="${esc(S.chauffeur || "")}" placeholder="Nom et prénom du conducteur">
+    <p class="small muted" style="margin:4px 0 0">Modifiable à chaque édition : il est gardé pour la prochaine fois.</p>
+    <div class="card" style="margin-top:12px;padding:10px 12px"><b>${items.length} course${items.length>1?"s":""}</b> · total des heures <b>${durTxt(tot)}</b></div>
+    <button class="btn go lg w100" style="margin-top:12px" data-act="pointPdf" ${items.length?"":"disabled"}>📄 Fichier PDF</button>
+    <button class="btn w100" style="margin-top:8px" data-act="pointBack">← Retour au relevé</button>`);
+}
+function pointPdf(){
+  const items = repEntries(); const W = 842, Hh = 595, M = 36, RH = 22;
+  const cols = [["Jour", 115], ["Date", 95], ["Heure de départ", 115], ["Heure de retour", 115], ["Total des heures", 105], ["Motif", W - 2*M - 545]];
+  const rows = items.map(e => { const d = new Date(e.start); return [JOURS_LONG[d.getDay()], dFr(e.date), hm(e.start), hm(e.end), durTxt(e.duree || 0), `${e.tourneeNom || "Tournée"} — ${e.sens === "matin" ? "matin" : e.sens === "midi" ? "midi" : "soir"}`]; });
+  const tot = items.reduce((a, e) => a + (e.duree || 0), 0);
+  const data = rows.length < 12 ? rows.concat(Array(12 - rows.length).fill(null)) : rows;   // lignes vides comme sur le modèle papier
+  const pages = []; let ops = []; let y;
+  const T = (x, yy, t, size = 9, bold = false) => ops.push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET`);
+  const L = (x1, y1, x2, y2) => ops.push(`0.35 G 0.6 w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
+  const header = () => {
+    ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
+    let x = M; cols.forEach(([l, w]) => { T(x + 6, y - 15, l.toUpperCase(), 8.5, true); x += w; });
+    y -= RH;
+  };
+  const newPage = first => {
+    if (ops.length) pages.push(ops); ops = []; y = Hh - M;
+    if (first){
+      T(M, y - 12, PTG_TITRE, 16, true); y -= 30;
+      ops.push(`0.99 0.90 0.25 rg ${M} ${(y - 26).toFixed(1)} ${W - 2*M} 26 re f 0 g`);
+      T(M + 8, y - 17, `CONDUCTEUR : ${S.chauffeur || "……………………………………"}`, 10, true);
+      T(M + 440, y - 17, `PÉRIODE : ${repPeriode().toUpperCase()}`, 9, true); y -= 26;
+    }
+    header();
+  };
+  newPage(true);
+  data.forEach(r => {
+    if (y - RH < M + 40) newPage(false);
+    const yTop = y, yBot = y - RH;
+    if (r){ let x = M; r.forEach((t, c) => { const ls = wrap(t, cols[c][1] - 12, 9); T(x + 6, y - 15, ls[0] || "", 9, c === 4); x += cols[c][1]; }); }
+    L(M, yBot, W - M, yBot);
+    let x = M; cols.forEach(([, w]) => { L(x, yBot, x, yTop); x += w; }); L(W - M, yBot, W - M, yTop);
+    y = yBot;
+  });
+  if (y - RH < M + 30) newPage(false);
+  ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
+  T(M + 6, y - 15, "TOTAL DES HEURES", 9, true);
+  T(M + 6 + cols[0][1] + cols[1][1] + cols[2][1] + cols[3][1], y - 15, durTxt(tot), 9, true);
+  y -= RH;
+  pages.push(ops);
+  // écriture du PDF
+  const objs = []; const add = o => { objs.push(o); return objs.length; };
+  const fN = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const fB = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pagesId = objs.length + 1 + pages.length * 2; const kids = [];
+  pages.forEach(pg => {
+    const stream = pg.join("\n");
+    const c = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${Hh}] /Resources << /Font << /F1 ${fN} 0 R /F2 ${fB} 0 R >> >> /Contents ${c} 0 R >>`));
+  });
+  add(`<< /Type /Pages /Kids [${kids.map(k => k + " 0 R").join(" ")}] /Count ${kids.length} >>`);
+  const cat = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let out = "%PDF-1.4\n"; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i+1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("");
+  out += `trailer\n<< /Size ${objs.length+1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  const blob = new Blob([out], { type: "application/pdf" });
+  const name = `pointage-heures-${(S.chauffeur || "conducteur").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${rep.mode}.pdf`;
+  if (typeof downloadBlob === "function"){ downloadBlob(blob, name); toast("Pointage enregistré dans vos téléchargements ✓"); return; }
+  if (dlNs){ dlNs.save({ filename: name, data: blob }).then(() => toast("Pointage enregistré ✓")).catch(e => { if (e?.code !== "declined") toast("Impossible d'enregistrer ici"); }); }
 }
 function repText(){
   const items = repEntries(); const m = repMeta(items);
@@ -2986,6 +3060,9 @@ document.addEventListener("click", e => {
     case "report": rep = null; reportSheet(); break;
     case "repMode": rep.mode = id; reportSheet(); break;
     case "repPdf": saveReport("pdf"); break;
+    case "pointOpen": pointageSheet(); break;
+    case "pointPdf": pointPdf(); break;
+    case "pointBack": reportSheet(); break;
     case "repPng": saveReport("png"); break;
     case "repText": copyText(repText()); break;
     case "voiceHelp": voiceHelpSheet(); break;
@@ -3046,6 +3123,7 @@ document.addEventListener("change", e => {
   }
   if (t.id === "k_heure"){ const a = document.getElementById("alt_heure"); if (a && (!a.value || a.value === a.dataset.gen)) a.value = t.value; if (a) a.dataset.gen = t.value; return; }
   if (t.id === "depCam" || t.id === "depGal"){ const f = t.files && t.files[0]; t.value = ""; depPhoto(f); return; }
+  if (t.id === "ptg_nom"){ S.chauffeur = t.value.trim(); save(); return; }
   if (t.id === "sim_date" && t.value){ sim.date = t.value; simSheet(); return; }
   if (t.id === "sim_sens"){ sim.sens = t.value; simSheet(); return; }
   if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
