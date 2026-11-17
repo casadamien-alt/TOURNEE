@@ -1455,17 +1455,16 @@ function renderEdit(){
 let rep = null;
 function allEntries(){ return Object.values(H).flat().filter(Boolean).sort((a,b) => a.start < b.start ? -1 : 1); }
 function mondayOf(dk){ const d = new Date(dk+"T12:00:00"); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return dayKey(d); }
-function repEntries(){
-  const all = allEntries();
-  if (rep.mode === "mois") return all.filter(e => monthKey(e.start) === rep.month);
-  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); const su = addDays(m, 6); return all.filter(e => e.date >= m && e.date <= su); }
-  return all.filter(e => rep.days.includes(e.date));
+// une date (AAAA-MM-JJ) fait-elle partie de la sélection du relevé ?
+function repInSel(d){
+  if (!d) return false;
+  if (rep.mode === "mois") return d.slice(0, 7) === rep.month;
+  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); return d >= m && d <= addDays(m, 6); }
+  return rep.days.includes(d) || (rep.periods || []).some(p => d >= p.from && d <= p.to);
 }
+function repEntries(){ return allEntries().filter(e => repInSel(e.date)); }
 function repPleins(){
-  const all = (S.pleins || []).filter(p => p.date).sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
-  if (rep.mode === "mois") return all.filter(p => p.date.slice(0, 7) === rep.month);
-  if (rep.mode === "semaine"){ const m = mondayOf(rep.week); const su = addDays(m, 6); return all.filter(p => p.date >= m && p.date <= su); }
-  return all.filter(p => rep.days.includes(p.date));
+  return (S.pleins || []).filter(p => p.date && repInSel(p.date)).sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
 }
 const FUEL_COLS_PDF = [["Date","date",80],["Heure","heure",50],["Véhicule","veh",200],["Kilométrage","km",80],["Carburant","carb",90],["Prix au litre","prix",80],["Litres","litres",80],["Prix du plein","montant",110]];
 const FUEL_COLS_PNG = [["Date","date",130],["Heure","heure",80],["Véhicule","veh",300],["Kilométrage","km",120],["Carburant","carb",140],["Prix au litre","prix",120],["Litres","litres",120],["Prix du plein","montant",150]];
@@ -1475,7 +1474,10 @@ function fuelRows(items){ return items.map(p => ({ date: dFr(p.date), heure: p.h
 function repPeriode(){
   if (rep.mode === "mois") return moisTxt(rep.month);
   if (rep.mode === "semaine"){ const m = mondayOf(rep.week); return `semaine du ${dateLong(m)} au ${dateLong(addDays(m, 6))}`; }
-  const d = rep.days.slice().sort(); return d.length === 1 ? dateLong(d[0]) : `${d.length} journées choisies (${d.map(dFr).join(", ")})`;
+  const per = (rep.periods || []).slice().sort((a, b) => a.from < b.from ? -1 : 1).map(p => p.from === p.to ? dFr(p.from) : `du ${dFr(p.from)} au ${dFr(p.to)}`);
+  const jours = rep.days.slice().sort().map(dFr);
+  const parts = [...per, ...jours];
+  return parts.length ? parts.join(" · ") : "aucune période choisie";
 }
 function repFile(ext){
   const base = rep.mode === "mois" ? `releve-tournees-${rep.month}` : rep.mode === "semaine" ? `releve-tournees-semaine-${mondayOf(rep.week)}` : `releve-tournees-${(rep.days.slice().sort()[0]||"jours")}`;
@@ -1495,38 +1497,42 @@ function repMeta(items){
 function reportSheet(){
   if (!rep){
     const months = [...new Set(allEntries().map(e => monthKey(e.start)))].sort().reverse();
-    rep = { mode:"mois", month: months.includes(histMonth) ? histMonth : (months[0] || histMonth), week: dayKey(new Date()), days: [] };
+    rep = { mode:"mois", month: months.includes(histMonth) ? histMonth : (months[0] || histMonth), week: dayKey(new Date()), days: [], periods: [] };
   }
+  if (!rep.periods) rep.periods = [];
   const all = allEntries();
   const months = [...new Set(all.map(e => monthKey(e.start)))].sort().reverse();
-  const items = repEntries(); const m = repMeta(items); const fu = repPleins(); const ft = crepTot(fu);
+  const items = repEntries(); const m = repMeta(items); const fu = repPleins();
   let ctl = "";
   if (rep.mode === "mois") ctl = `<label class="f">Mois</label><select class="t" id="rep_month">${months.map(mk => `<option value="${mk}" ${mk===rep.month?"selected":""}>${moisTxt(mk)}</option>`).join("")}</select>`;
   else if (rep.mode === "semaine") ctl = `<label class="f">Un jour de la semaine voulue</label><input class="t" type="date" id="rep_week" value="${rep.week}">
       <p class="small muted" style="margin:4px 0 0">Semaine du ${dateLong(mondayOf(rep.week))} au ${dateLong(addDays(mondayOf(rep.week), 6))}</p>`;
   else {
     const days = [...new Set(all.map(e => e.date))].sort().reverse();
-    ctl = `<label class="f">Cochez les journées</label><div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;padding:4px 10px">${days.map(dk => {
-      const n = all.filter(e => e.date === dk).length;
-      return `<label class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-repday="${dk}" ${rep.days.includes(dk)?"checked":""} style="width:22px;height:22px"><span class="grow" style="text-transform:capitalize">${dateLong(dk)}</span><span class="small muted">${n} tournée${n>1?"s":""}</span></label>`; }).join("") || `<p class="small muted">Aucune tournée.</p>`}</div>`;
+    ctl = `<label class="f">Périodes choisies</label>
+      ${rep.periods.map((p, i) => `<div class="row" style="align-items:center;margin:4px 0"><span class="grow">du ${dFr(p.from)} au ${dFr(p.to)}</span><button class="btn sm" data-act="repPerDel" data-id="${i}">✕</button></div>`).join("") || `<p class="small muted" style="margin:4px 0">Aucune période ajoutée.</p>`}
+      <div class="row" style="margin:6px 0"><div class="grow"><label class="f">Du</label><input class="t" type="date" id="rep_from"></div><div class="grow"><label class="f">Au</label><input class="t" type="date" id="rep_to"></div></div>
+      <button class="btn w100" data-act="repPerAdd">+ Ajouter cette période</button>
+      <label class="f" style="margin-top:10px">Ou cochez des journées isolées</label><div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;padding:4px 10px">${days.map(dk => {
+        const n = all.filter(e => e.date === dk).length;
+        return `<label class="row" style="padding:7px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-repday="${dk}" ${rep.days.includes(dk)?"checked":""} style="width:22px;height:22px"><span class="grow" style="text-transform:capitalize">${dateLong(dk)}</span><span class="small muted">${n} tournée${n>1?"s":""}</span></label>`; }).join("") || `<p class="small muted">Aucune tournée.</p>`}</div>`;
   }
-  openSheet(`<h2>📄 Relevé des tournées</h2>
-    <div class="row">${[["mois","Mensuel"],["semaine","Hebdomadaire"],["jours","Jours au choix"]].map(([k,l]) => `<button class="btn sm ${rep.mode===k?"primary":""} grow" data-act="repMode" data-id="${k}">${l}</button>`).join("")}</div>
+  openSheet(`<h2>📄 Relevé des heures</h2>
+    <label class="f">Format</label>
+    <div class="row">${[["mois","Pointage mensuel"],["semaine","Pointage hebdomadaire"],["jours","Dates choisies"]].map(([k,l]) => `<button class="btn sm ${rep.mode===k?"primary":""} grow" data-act="repMode" data-id="${k}">${l}</button>`).join("")}</div>
+    <label class="f" style="margin-top:10px">Conducteur</label><input class="t" id="ptg_nom" value="${esc(S.chauffeur || "")}" placeholder="Nom et prénom du conducteur">
     ${ctl}
     <div class="card" style="margin-top:12px;padding:10px 12px">
-      <b>${m.n} tournée${m.n>1?"s":""}</b> · durée totale <b>${durTxt(m.tot)}</b>
+      <b>${m.n} tournée${m.n>1?"s":""}</b> · total des heures <b>${durTxt(m.tot)}</b>
       <div class="small muted" style="margin-top:2px">${esc(repPeriode())}</div>
       ${items.length ? `<table class="steps" style="margin-top:6px">${repRows(items).slice(0,40).map(r => `<tr><td>${esc(r.date)} · ${r.trajet}</td><td>${r.depart} → ${r.arrivee} · ${esc(r.duree)}</td></tr>`).join("")}</table>${items.length > 40 ? `<p class="small muted">… et ${items.length-40} autres</p>` : ""}` : `<p class="small muted" style="margin:6px 0 0">Aucune tournée sur cette période.</p>`}
     </div>
     ${fu.length ? `<div class="card" style="padding:10px 12px"><b>⛽ Carburant</b>
-      <table class="steps" style="margin-top:6px">${fuelRows(fu).map(r => `<tr><td>${esc(r.date)} ${esc(r.heure)} · ${esc(r.veh)}<br><span class="small muted">${esc(r.km)} · ${esc(r.carb)} · ${esc(r.litres)} à ${esc(r.prix)}/L</span></td><td>${esc(r.montant)}</td></tr>`).join("")}</table>
-      <p class="small muted" style="margin:6px 0 0">Ajouté à la fin du relevé, après les tournées.</p></div>` : ""}
+      <table class="steps" style="margin-top:6px">${fuelRows(fu).map(r => `<tr><td>${esc(r.date)} ${esc(r.heure)} · ${esc(r.veh)}<br><span class="small muted">${esc(r.km)} · ${esc(r.carb)} · ${esc(r.litres)} à ${esc(r.prix)}/L</span></td><td>${esc(r.montant)}</td></tr>`).join("")}</table></div>` : ""}
     <div class="row" style="margin-top:4px">
-      <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length||fu.length?"":"disabled"}>📄 Fichier PDF</button>
-      <button class="btn grow" style="padding:14px" data-act="repPng" ${items.length||fu.length?"":"disabled"}>🖼️ Image</button></div>
-    <button class="btn w100" style="margin-top:8px" data-act="pointOpen" ${items.length?"":"disabled"}>📋 Pointage mensuel (tableau à signer)</button>
+      <button class="btn go grow" style="padding:14px" data-act="repPdf" ${items.length||fu.length?"":"disabled"}>📄 Fichier PDF</button></div>
     <button class="btn w100" style="margin-top:8px" data-act="repText" ${items.length||fu.length?"":"disabled"}>📋 Copier en texte (pour un e-mail)</button>
-    <p class="small muted">Le relevé indique pour chaque tournée : le jour, le trajet, l'heure de départ et d'arrivée, la durée, le nombre d'enfants et les enfants absents, puis les pleins de carburant de la période. Vous pourrez ensuite l'envoyer par e-mail ou par message.</p>
+    <p class="small muted">Le PDF reprend la mise en page du pointage : conducteur et période en haut de chaque page, numéro de page, tableau des dépenses de la période, puis le bloc réservé à l'employeur à la fin de la dernière page.</p>
     <button class="btn w100" data-act="close">Fermer</button>`);
 }
 /* ---------- 📋 Pointage mensuel des heures (tableau à signer, paysage A4) ---------- */
@@ -1544,19 +1550,13 @@ function runEtablissements(e){
   return [...new Set(l.length ? l : (e.etab ? e.etab.split(", ") : []))];
 }
 function hmDur(min){ min = Math.max(0, Math.round(min || 0)); return `${Math.floor(min / 60)} h ${p2(min % 60)}`; }
-function pointageSheet(){
-  const items = repEntries(), tot = items.reduce((a, e) => a + (e.duree || 0), 0);
-  openSheet(`<h2>📋 Pointage mensuel</h2>
-    <p class="small muted" style="margin-top:0">Même période que le relevé : ${esc(repPeriode())}.</p>
-    <label class="f">Conducteur</label><input class="t" id="ptg_nom" value="${esc(S.chauffeur || "")}" placeholder="Nom et prénom du conducteur">
-    <p class="small muted" style="margin:4px 0 0">Modifiable à chaque édition : il est gardé pour la prochaine fois.</p>
-    <div class="card" style="margin-top:12px;padding:10px 12px"><b>${items.length} course${items.length>1?"s":""}</b> · total des heures <b>${durTxt(tot)}</b></div>
-    <button class="btn go lg w100" style="margin-top:12px" data-act="pointPdf" ${items.length?"":"disabled"}>📄 Fichier PDF</button>
-    <button class="btn w100" style="margin-top:8px" data-act="pointBack">← Retour au relevé</button>`);
+// moment de la journée d'après l'heure de départ : matin avant 11 h 30, midi avant 14 h 30, soir ensuite
+function momentJournee(iso){
+  const h = new Date(iso); const m = h.getHours() * 60 + h.getMinutes();
+  return m < 11*60 + 30 ? "matin" : m < 14*60 + 30 ? "midi" : "soir";
 }
 function repDepRows(){
-  const mon = mondayOf(rep.week || dayKey(new Date()));
-  const inP = d => !!d && (rep.mode === "mois" ? d.slice(0, 7) === rep.month : rep.mode === "semaine" ? (d >= mon && d <= addDays(mon, 6)) : rep.days.includes(d));
+  const inP = repInSel;
   const fu = repPleins().map(p => ({ k: p.date + (p.heure || ""), cells: [dFr(p.date), "Carburant" + (p.carburant ? " " + p.carburant : ""),
     [p.station, [p.vehicule, p.immat].filter(Boolean).join(" "), p.note].filter(Boolean).join(" — ") || "—",
     p.litres != null ? fmtN(p.litres, 2) + " L" : "—", p.prixL ? fmtN(p.prixL, 3) + " €" : "—", p.montant != null ? fmtN(p.montant, 2) + " €" : "—"] }));
@@ -1587,7 +1587,7 @@ function pointPdf(){
   };
   const rowsData = items.map(e => {
     const d = new Date(e.start); const ml = motifLayout(e);
-    return { cells: [JOURS_LONG[d.getDay()], dFr(e.date), hm(e.start), hm(e.end), hmDur(e.duree)], ml, h: Math.max(RH, ml.length * LH + 12) };
+    return { cells: [`${JOURS_LONG[d.getDay()]} — ${momentJournee(e.start)}`, dFr(e.date), hm(e.start), hm(e.end), hmDur(e.duree)], ml, h: Math.max(RH, ml.length * LH + 12) };
   });
   const tot = items.reduce((a, e) => a + (e.duree || 0), 0);
   const minH = 12 * RH;   // lignes vides comme sur le modèle papier
@@ -1603,7 +1603,7 @@ function pointPdf(){
   };
   const newPage = (first, hdr = true) => {
     if (ops.length) pages.push(ops); ops = []; y = Hh - M;
-    if (first){ T(M, y - 12, PTG_TITRE, 16, true); y -= 30; }
+    if (first){ T(M, y - 12, rep.mode === "mois" ? PTG_TITRE : rep.mode === "semaine" ? "Pointage hebdomadaire des heures" : "Pointage des heures", 16, true); y -= 30; }
     ops.push(`0.99 0.90 0.25 rg ${M} ${(y - 26).toFixed(1)} ${W - 2*M} 26 re f 0 g`);
     T(M + 8, y - 17, `CONDUCTEUR : ${S.chauffeur || "……………………………………"}`, 10, true);
     T(M + 440, y - 17, `PÉRIODE : ${repPeriode().toUpperCase()}`, 9, true); y -= 26;
@@ -1696,30 +1696,6 @@ function repText(){
   return L.join("\n");
 }
 
-/* ---------- PDF (écrit sans bibliothèque : police Helvetica standard) ---------- */
-const WIN = { "€":128,"‚":130,"„":132,"…":133,"‘":145,"’":146,"“":147,"”":148,"•":149,"–":150,"—":151,"œ":156,"Œ":140,"Ÿ":159,"š":154,"Š":138 };
-function pdfStr(t){
-  let o = "";
-  for (const ch of String(t)){
-    let c = ch.codePointAt(0);
-    if (WIN[ch]) c = WIN[ch]; else if (c > 255 || (c >= 128 && c < 160)) c = c === 8239 || c === 160 ? 32 : 63;
-    if (c === 40 || c === 41 || c === 92) o += "\\" + String.fromCharCode(c);
-    else if (c < 32 || c > 126) o += "\\" + c.toString(8).padStart(3, "0");
-    else o += String.fromCharCode(c);
-  }
-  return o.replace(/\?{2,}/g, "?");
-}
-function txtW(t, size, bold){
-  let w = 0;
-  for (const ch of String(t)){ w += /[ijlI.,:;'|!]/.test(ch) ? .28 : /[ftr\- ()]/.test(ch) ? .33 : /[mwMW]/.test(ch) ? .83 : /[A-Z]/.test(ch) ? .68 : /[0-9]/.test(ch) ? .56 : .53; }
-  return w * size * (bold ? 1.06 : 1);
-}
-function wrap(t, width, size, bold){
-  const words = String(t).split(/\s+/); const lines = []; let cur = "";
-  words.forEach(w => { const test = cur ? cur + " " + w : w; if (txtW(test, size, bold) <= width || !cur) cur = test; else { lines.push(cur); cur = w; } });
-  if (cur) lines.push(cur);
-  return lines.map(l => { while (txtW(l, size, bold) > width && l.length > 1) l = l.slice(0, -2) + "…"; return l; });
-}
 function makePdf(){
   const items = repEntries(); const m = repMeta(items); const rows = repRows(items);
   const W = 842, Hh = 595, M = 36;
@@ -1795,8 +1771,6 @@ function makePdf(){
   out += `trailer\n<< /Size ${objs.length+1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return new Blob([out], { type: "application/pdf" });
 }
-
-/* ---------- Image PNG (dessinée sur un canevas) ---------- */
 function makePng(){
   const items = repEntries(); const m = repMeta(items); const rows = repRows(items);
   const S2 = 2, W = 1240, M = 40;
@@ -1862,6 +1836,33 @@ async function saveReport(kind){
     copyText(repText());
   } catch(e){ toast("Erreur lors de la création du relevé"); }
 }
+
+/* ---------- PDF (écrit sans bibliothèque : police Helvetica standard) ---------- */
+const WIN = { "€":128,"‚":130,"„":132,"…":133,"‘":145,"’":146,"“":147,"”":148,"•":149,"–":150,"—":151,"œ":156,"Œ":140,"Ÿ":159,"š":154,"Š":138 };
+function pdfStr(t){
+  let o = "";
+  for (const ch of String(t)){
+    let c = ch.codePointAt(0);
+    if (WIN[ch]) c = WIN[ch]; else if (c > 255 || (c >= 128 && c < 160)) c = c === 8239 || c === 160 ? 32 : 63;
+    if (c === 40 || c === 41 || c === 92) o += "\\" + String.fromCharCode(c);
+    else if (c < 32 || c > 126) o += "\\" + c.toString(8).padStart(3, "0");
+    else o += String.fromCharCode(c);
+  }
+  return o.replace(/\?{2,}/g, "?");
+}
+function txtW(t, size, bold){
+  let w = 0;
+  for (const ch of String(t)){ w += /[ijlI.,:;'|!]/.test(ch) ? .28 : /[ftr\- ()]/.test(ch) ? .33 : /[mwMW]/.test(ch) ? .83 : /[A-Z]/.test(ch) ? .68 : /[0-9]/.test(ch) ? .56 : .53; }
+  return w * size * (bold ? 1.06 : 1);
+}
+function wrap(t, width, size, bold){
+  const words = String(t).split(/\s+/); const lines = []; let cur = "";
+  words.forEach(w => { const test = cur ? cur + " " + w : w; if (txtW(test, size, bold) <= width || !cur) cur = test; else { lines.push(cur); cur = w; } });
+  if (cur) lines.push(cur);
+  return lines.map(l => { while (txtW(l, size, bold) > width && l.length > 1) l = l.slice(0, -2) + "…"; return l; });
+}
+
+/* ---------- Image PNG (dessinée sur un canevas) ---------- */
 
 /* =========================================================
    ⛽ Carburant : pleins, photo du reçu, lecture automatique (OCR)
@@ -3139,11 +3140,10 @@ document.addEventListener("click", e => {
     case "vcfAll": saveVcf(contactRows(), "contacts-transport-scolaire.vcf"); break;
     case "report": rep = null; reportSheet(); break;
     case "repMode": rep.mode = id; reportSheet(); break;
-    case "repPdf": saveReport("pdf"); break;
-    case "pointOpen": pointageSheet(); break;
+    case "repPdf": pointPdf(); break;
+    case "repPerAdd": { const f = document.getElementById("rep_from")?.value, t2 = document.getElementById("rep_to")?.value; if (!f || !t2){ toast("Choisissez les deux dates"); break; } rep.periods.push({ from: f <= t2 ? f : t2, to: f <= t2 ? t2 : f }); reportSheet(); break; }
+    case "repPerDel": rep.periods.splice(+id, 1); reportSheet(); break;
     case "pointPdf": pointPdf(); break;
-    case "pointBack": reportSheet(); break;
-    case "repPng": saveReport("png"); break;
     case "repText": copyText(repText()); break;
     case "voiceHelp": voiceHelpSheet(); break;
     case "handsFree": toggleHandsFree(); break;
