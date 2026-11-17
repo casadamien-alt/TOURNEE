@@ -166,6 +166,8 @@ function blankState(){ return { v:2, chauffeur:"", tpl:{...DEFAULT_TPL}, tournee
 let S = blankState();
 let H = {};                 // historique : { "2026-11": [entrées] }
 let view = "tournees";      // tournees | historique | reglages
+let retourSel = "";          // jour de la semaine choisi dans la fiche (« » = tous les jours)
+function dateDuJour(wd){ return addDays(mondayOf(dayKey(new Date())), (wd + 6) % 7); }   // une date de ce jour de la semaine
 let sub = null;             // null | {type:"edit", id} | {type:"prep", id, sens, present:[]}
 let histMonth = monthKey(new Date());
 let openHist = null;
@@ -1460,10 +1462,12 @@ function renderEdit(){
   ${(t.ordrePrec || Array.isArray(t.ordreSoir) || Array.isArray(t.ordreRetour) || t.retourJour) ? `<div class="card"><h3>↩️ Ordres enregistrés</h3>
     <p class="small muted" style="margin:0 0 6px">${t.ordrePrec ? "Un ordre précédent peut être rétabli." : "Pas d'ordre précédent à rétablir."}</p>
     <div class="row">${t.ordrePrec ? `<button class="btn sm" data-act="ordreRestore">↺ Annuler le dernier changement</button>` : ""}<button class="btn sm" data-act="ordreDefaut">Revenir à l'ordre par défaut</button></div></div>` : ""}
-  ${t.etabs.length > 1 ? `<div class="card"><h3>🔁 Ordre au retour</h3>
-    <p class="small muted" style="margin:0 0 6px">Par défaut, l'inverse de l'aller. Vous pouvez le changer à tout moment.</p>
-    ${etabsRetourGen(t).map((e, ri) => `<div class="row" style="align-items:center"><span class="grow">${ri+1}. 🏫 ${esc(e.nom || "Établissement")}</span><div class="ord" style="flex-direction:row"><button data-act="rUp" data-i="${ri}" ${ri===0?"disabled":""}>▲</button><button data-act="rDown" data-i="${ri}" ${ri===t.etabs.length-1?"disabled":""}>▼</button></div></div>`).join("")}
-    ${Array.isArray(t.ordreRetour) ? `<button class="btn sm" style="margin-top:6px" data-act="rReset">↺ Revenir à l'inverse de l'aller</button>` : ""}</div>` : ""}
+  ${t.etabs.length > 1 ? (() => { const wd = retourSel === "" ? null : Number(retourSel); const dk = wd === null ? null : dateDuJour(wd); const ordre = wd === null ? etabsRetourGen(t) : etabsRetour(t, dk); const ex = wd !== null && t.retourJour?.[wd];
+    return `<div class="card"><h3>🔁 Ordre au retour</h3>
+    <label class="f" style="margin-top:0">Pour</label><select class="t" id="ret_jour"><option value="" ${wd === null ? "selected" : ""}>Tous les jours (ordre général)</option>${JOURS_PLAN.map(d => `<option value="${d}" ${wd === d ? "selected" : ""}>Seulement le ${JOURS_LONG[d]}</option>`).join("")}</select>
+    <p class="small muted" style="margin:6px 0">${wd === null ? "Par défaut, l'inverse de l'aller." : (ex ? `Ordre propre aux ${JOURS_LONG[wd]}s.` : `Pas encore d'ordre propre : l'ordre général s'applique le ${JOURS_LONG[wd]}.`)}</p>
+    ${ordre.map((e, ri) => `<div class="row" style="align-items:center"><span class="grow">${ri+1}. 🏫 ${esc(e.nom || "Établissement")}</span><div class="ord" style="flex-direction:row"><button data-act="tUp" data-i="${ri}" ${ri===0?"disabled":""}>▲</button><button data-act="tDown" data-i="${ri}" ${ri===ordre.length-1?"disabled":""}>▼</button></div></div>`).join("")}
+    <div class="row" style="margin-top:6px">${wd === null ? (Array.isArray(t.ordreRetour) ? `<button class="btn sm" data-act="rReset">↺ Revenir à l'inverse de l'aller</button>` : "") : (ex ? `<button class="btn sm" data-act="tDelDay">↺ Supprimer l'ordre propre au ${JOURS_LONG[wd]}</button>` : "")}</div></div>`; })() : ""}
   ${t.etabs.length > 1 ? `<div class="card" style="background:#f3faf6;border-color:#bfe3d2"><h3>🕛 Trajet de midi</h3>
     <label class="row" style="font-weight:800"><input type="checkbox" data-tf="midiOn" ${t.midiOn ? "checked" : ""} style="width:22px;height:22px"> Cette tournée a un trajet le midi, d'un établissement à un autre</label>
     ${t.midiOn ? `<label class="f">Établissement d'arrivée le midi (par défaut)</label><select class="t" data-tf="midiDest">${t.etabs.map(e => `<option value="${e.id}" ${e.id === (t.midiDest || t.etabs[t.etabs.length-1].id) ? "selected" : ""}>${esc(e.nom || "Établissement")}</option>`).join("")}</select>
@@ -3235,7 +3239,11 @@ document.addEventListener("click", e => {
     case "delEtabOk": { const t = tour(sub.id); t.etabs.splice(pendingEtab, 1); linkEtabs(t); save(); closeSheet(); render(); break; }
     case "pEtUp": case "pEtDown": { const o = sub.retourEtabs.slice(); const j = a === "pEtUp" ? i-1 : i+1; if (j>=0 && j<o.length){ [o[i],o[j]] = [o[j],o[i]]; sub.retourEtabs = o; render(); } break; }
     case "pKeepDay": { const t = tour(sub.id); snapOrdre(t); t.retourJour = t.retourJour || {}; t.retourJour[wdOf(dayKey(new Date()))] = { etabs: sub.retourEtabs.slice(), kids: sub.order.slice() }; save(); render(); toast(`Ordre gardé pour tous les ${JOURS_LONG[wdOf()]}s ✓`); break; }
-    case "rUp": case "rDown": { const t = tour(sub.id); const arr = etabsRetourGen(t).map(e => e.id); const j = a === "rUp" ? i-1 : i+1; if (j >= 0 && j < arr.length){ [arr[i], arr[j]] = [arr[j], arr[i]]; t.ordreRetour = arr; save(); render(); } break; }
+    case "tUp": case "tDown": { const t = tour(sub.id); const j = a === "tUp" ? i-1 : i+1;
+      if (retourSel === ""){ const arr = etabsRetourGen(t).map(e => e.id); if (j >= 0 && j < arr.length){ [arr[i], arr[j]] = [arr[j], arr[i]]; snapOrdre(t); t.ordreRetour = arr; save(); render(); } break; }
+      const wd = Number(retourSel); const arr = etabsRetour(t, dateDuJour(wd)).map(e => e.id);
+      if (j >= 0 && j < arr.length){ [arr[i], arr[j]] = [arr[j], arr[i]]; snapOrdre(t); t.retourJour = t.retourJour || {}; t.retourJour[wd] = { ...(t.retourJour[wd] || {}), etabs: arr }; save(); render(); } break; }
+    case "tDelDay": { const t = tour(sub.id); if (t.retourJour){ snapOrdre(t); delete t.retourJour[Number(retourSel)]; if (!Object.keys(t.retourJour).length) delete t.retourJour; save(); render(); } break; }
     case "rReset": { const t = tour(sub.id); snapOrdre(t); delete t.ordreRetour; save(); render(); break; }
     case "ordreRestore": { const t = tour(sub.id) || S.tournees.find(x => x.id === id); if (t && restaurerOrdre(t)){ save(); render(); toast("Ordre précédent rétabli ✓"); } break; }
     case "ordreDefaut": { const t = tour(sub.id); if (t){ ordreDefaut(t); save(); render(); toast("Ordre par défaut rétabli (l'ancien ordre reste annulable)"); } break; }
@@ -3306,6 +3314,7 @@ document.addEventListener("change", e => {
     en[key] = d.toISOString(); en.duree = Math.max(0, Math.round(minsBetween(en.start, en.end)));
     saveHist(mk); render(); toast("Horaire corrigé"); return;
   }
+  if (t.id === "ret_jour"){ retourSel = t.value; render(); return; }
   if (t.id === "k_heure"){ const a = document.getElementById("alt_heure"); if (a && (!a.value || a.value === a.dataset.gen)) a.value = t.value; if (a) a.dataset.gen = t.value; return; }
   if (t.id === "depCam" || t.id === "depGal"){ const f = t.files && t.files[0]; t.value = ""; depPhoto(f); return; }
   if (t.id === "ptg_nom"){ S.chauffeur = t.value.trim(); save(); return; }
