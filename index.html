@@ -803,6 +803,8 @@ function finishRun(){
     sens: a.sens, start: a.start, end, duree: Math.round(minsBetween(a.start, end)),
     nb: a.sens === "midi" ? new Set(a.steps.flatMap(s => s.type === "kid" ? [s.kid.id] : (s.pickup ? [] : (s.kids || [])))).size : a.steps.filter(s => s.type === "kid").length, absents: a.absents || [],
     remplace: a.remplace || "", responsable: a.responsable?.nom || "",
+    enfants: a.steps.filter(s => s.type === "kid").map(s => kidName(s.kid)),
+    etablissements: [...new Set(a.steps.filter(s => s.type === "etab").map(s => SE(s, a)?.nom).filter(Boolean))],
     etapes: a.steps.map(s => ({ label: s.type === "kid" ? kidName(s.kid) : (SE(s, a)?.nom || "Établissement"), at: s.at })).concat([{ label: "🏠 Retour", at: end }]),
     dernierArret: a.steps[a.steps.length-1]?.at || null,
     retour: a.steps[a.steps.length-1]?.at ? Math.round(minsBetween(a.steps[a.steps.length-1].at, end)) : null
@@ -1529,6 +1531,19 @@ function reportSheet(){
 }
 /* ---------- 📋 Pointage mensuel des heures (tableau à signer, paysage A4) ---------- */
 const PTG_TITRE = "Pointage mensuel des heures 2026-2027";
+function runEnfants(e){
+  if (Array.isArray(e.enfants)) return e.enfants;
+  const t = tour(e.tourneeId), etabNoms = new Set((t?.etabs || []).map(x => x.nom));
+  const etabs = new Set([...etabNoms, ...runEtablissements(e)]);
+  return (e.etapes || []).map(x => x.label).filter(l => l && !l.startsWith("🏠") && !etabs.has(l) && l !== e.etab);
+}
+function runEtablissements(e){
+  if (Array.isArray(e.etablissements) && e.etablissements.length) return e.etablissements;
+  const t = tour(e.tourneeId), etabNoms = new Set((t?.etabs || []).map(x => x.nom));
+  const l = (e.etapes || []).map(x => x.label).filter(x => etabNoms.has(x));
+  return [...new Set(l.length ? l : (e.etab ? e.etab.split(", ") : []))];
+}
+function hmDur(min){ min = Math.max(0, Math.round(min || 0)); return `${Math.floor(min / 60)} h ${p2(min % 60)}`; }
 function pointageSheet(){
   const items = repEntries(), tot = items.reduce((a, e) => a + (e.duree || 0), 0);
   openSheet(`<h2>📋 Pointage mensuel</h2>
@@ -1540,13 +1555,34 @@ function pointageSheet(){
     <button class="btn w100" style="margin-top:8px" data-act="pointBack">← Retour au relevé</button>`);
 }
 function pointPdf(){
-  const items = repEntries(); const W = 842, Hh = 595, M = 36, RH = 22;
-  const cols = [["Jour", 115], ["Date", 95], ["Heure de départ", 115], ["Heure de retour", 115], ["Total des heures", 105], ["Motif", W - 2*M - 545]];
-  const rows = items.map(e => { const d = new Date(e.start); return [JOURS_LONG[d.getDay()], dFr(e.date), hm(e.start), hm(e.end), durTxt(e.duree || 0), `${e.tourneeNom || "Tournée"} — ${e.sens === "matin" ? "matin" : e.sens === "midi" ? "midi" : "soir"}`]; });
+  const items = repEntries(); const W = 842, Hh = 595, M = 36, RH = 24, LH = 11;
+  const cols = [["Jour", 110], ["Date", 90], ["Heure de départ", 110], ["Heure de retour", 110], ["Total des heures", 100], ["Motif", W - 2*M - 520]];
+  const motifW = cols[5][1] - 12;
+  const RED = "0.85 0.1 0.1 rg", BLACK = "0 g";
+  // mise en page du motif : ligne 1 = tournée — établissements ; ligne 2 = prénoms (absents en rouge)
+  const motifLayout = e => {
+    const lines = [];
+    wrap(`${e.tourneeNom || "Tournée"} — ${runEtablissements(e).join(", ") || "établissement non renseigné"}`, motifW, 9).forEach(t => lines.push([{ t, c: BLACK }]));
+    const abs = new Set((e.absents || []).map(x => String(x)));
+    const noms = [...runEnfants(e), ...(e.absents || []).filter(x => !runEnfants(e).includes(x))];
+    let cur = [], w = 0;
+    noms.forEach((n, i) => {
+      const txt = n + (i < noms.length - 1 ? ", " : "");
+      const tw = txtW(txt, 9, false);
+      if (w + tw > motifW && cur.length){ lines.push(cur); cur = []; w = 0; }
+      cur.push({ t: txt, c: abs.has(n) ? RED : BLACK, nom: n }); w += tw;
+    });
+    if (cur.length) lines.push(cur);
+    return lines;
+  };
+  const rowsData = items.map(e => {
+    const d = new Date(e.start); const ml = motifLayout(e);
+    return { cells: [JOURS_LONG[d.getDay()], dFr(e.date), hm(e.start), hm(e.end), hmDur(e.duree)], ml, h: Math.max(RH, ml.length * LH + 12) };
+  });
   const tot = items.reduce((a, e) => a + (e.duree || 0), 0);
-  const data = rows.length < 12 ? rows.concat(Array(12 - rows.length).fill(null)) : rows;   // lignes vides comme sur le modèle papier
+  const minH = 12 * RH;   // lignes vides comme sur le modèle papier
   const pages = []; let ops = []; let y;
-  const T = (x, yy, t, size = 9, bold = false) => ops.push(`BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET`);
+  const T = (x, yy, t, size = 9, bold = false, col = BLACK) => ops.push(`${col} BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET 0 g`);
   const L = (x1, y1, x2, y2) => ops.push(`0.35 G 0.6 w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
   const header = () => {
     ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
@@ -1564,10 +1600,19 @@ function pointPdf(){
     header();
   };
   newPage(true);
-  data.forEach(r => {
-    if (y - RH < M + 40) newPage(false);
-    const yTop = y, yBot = y - RH;
-    if (r){ let x = M; r.forEach((t, c) => { const ls = wrap(t, cols[c][1] - 12, 9); T(x + 6, y - 15, ls[0] || "", 9, c === 4); x += cols[c][1]; }); }
+  const rowsAll = rowsData;
+  const padH = Math.max(0, minH - rowsAll.reduce((a, r) => a + r.h, 0));
+  const padCount = Math.ceil(padH / RH);
+  const all = rowsAll.concat(Array(padCount).fill(null));
+  all.forEach(r => {
+    const h = r ? r.h : RH;
+    if (y - h < M + 40) newPage(false);
+    const yTop = y, yBot = y - h;
+    if (r){
+      let x = M;
+      r.cells.forEach((t, c) => { T(x + 6, y - 15, t, 9, c === 4); x += cols[c][1]; });
+      r.ml.forEach((segs, i) => { let xx = M + cols.slice(0, 5).reduce((a, c) => a + c[1], 0) + 6; segs.forEach(sg => { T(xx, y - 14 - i * LH, sg.t, 9, false, sg.c); xx += txtW(sg.t, 9, false); }); });
+    }
     L(M, yBot, W - M, yBot);
     let x = M; cols.forEach(([, w]) => { L(x, yBot, x, yTop); x += w; }); L(W - M, yBot, W - M, yTop);
     y = yBot;
@@ -1575,7 +1620,7 @@ function pointPdf(){
   if (y - RH < M + 30) newPage(false);
   ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
   T(M + 6, y - 15, "TOTAL DES HEURES", 9, true);
-  T(M + 6 + cols[0][1] + cols[1][1] + cols[2][1] + cols[3][1], y - 15, durTxt(tot), 9, true);
+  T(M + 6 + cols[0][1] + cols[1][1] + cols[2][1] + cols[3][1], y - 15, hmDur(tot), 9, true);
   y -= RH;
   pages.push(ops);
   // écriture du PDF
