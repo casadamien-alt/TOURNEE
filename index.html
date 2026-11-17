@@ -1811,14 +1811,15 @@ async function uploadPhotos(){
   if (!hasDrive() || uploadPhotos.busy) return;
   uploadPhotos.busy = true;
   try {
-    for (const p of (S.pleins || []).filter(x => x.photo && !x.photoDrive)){
+    const tousRecus = [...(S.pleins || []), ...(S.depenses || [])];
+    for (const p of tousRecus.filter(x => x.photo && !x.photoDrive)){
       const blob = await RECUS.get(p.id); if (!blob) continue;
-      const r = await fetch(ENDPOINT, { method: "POST", body: JSON.stringify({ code: code(), photo: { nom: photoName(p), type: blob.type || "image/jpeg", data: await blobToB64(blob) } }) });
+      const r = await fetch(ENDPOINT, { method: "POST", body: JSON.stringify({ code: code(), photo: { nom: photoName({ ...p, station: p.station || p.libelle || p.type || "depense" }), type: blob.type || "image/jpeg", data: await blobToB64(blob) } }) });
       const j = await r.json();
       if (!j.ok) break;
       if (!j.photo){ photoScriptOld = true; break; }       // programme Google pas encore mis à jour
       photoScriptOld = false;
-      const cur = (S.pleins || []).find(x => x.id === p.id); if (cur){ cur.photoDrive = j.photo; save(); }
+      const cur = tousRecus.find(x => x.id === p.id); if (cur){ cur.photoDrive = j.photo; save(); }
     }
   } catch(e){}
   uploadPhotos.busy = false;
@@ -1901,6 +1902,7 @@ function conso(p){
 function renderCarbu(){
   const months = [...new Set((S.pleins || []).map(p => (p.date || "").slice(0, 7)).filter(Boolean).concat([monthKey(new Date()), carbuMonth]))].sort().reverse();
   const items = pleinsDuMois(carbuMonth);
+  const depItems = depensesDuMois(carbuMonth);
   const tot = items.reduce((a, p) => a + (p.montant || 0), 0), lit = items.reduce((a, p) => a + (p.litres || 0), 0);
   const waiting = (S.pleins || []).filter(p => p.photo && !p.photoDrive).length;
   let h = `<a class="btn w100" style="margin-bottom:8px" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("TotalEnergies station essence")}">🔍 Chercher une station Total sur Google Maps</a>
@@ -1914,7 +1916,6 @@ function renderCarbu(){
     <div class="tot"><div><span class="small muted">Pleins</span><b>${items.length}</b></div><div><span class="small muted">Litres</span><b>${fmtN(lit, 1) || "0"}</b></div><div><span class="small muted">Total carburant</span><b>${eur(tot)}</b></div></div>`;
   if (hasDrive() && waiting && photoScriptOld) h += `<div class="card small" style="border-color:var(--warn)">📱 ${waiting} photo${waiting > 1 ? "s" : ""} de reçu reste${waiting > 1 ? "nt" : ""} sur ce téléphone : le programme Google doit être mis à jour pour les ranger dans votre Drive (voir le guide).</div>`;
   if (!items.length && !depItems.length) h += `<div class="card empty muted"><div class="big">⛽</div>Aucun plein enregistré ce mois-ci.<br><span class="small">Après chaque plein, photographiez le ticket : l'application lit le montant, les litres, le prix au litre, la date, la station et le carburant.</span></div>`;
-  const depItems = depensesDuMois(carbuMonth);
   const merged = [...items.map(p => ({ k: "p", d: (p.date || "") + (p.heure || ""), p })), ...depItems.map(x => ({ k: "d", d: (x.date || "") + (x.heure || ""), x }))].sort((a, b) => b.d.localeCompare(a.d));
   merged.forEach(m => { if (m.k === "d"){ h += depCard(m.x); return; } const p = m.p;
     const c = conso(p);
@@ -1938,17 +1939,60 @@ function depCard(x){
       ${x.note ? `<div class="small muted">${esc(x.note)}</div>` : ""}</div>
     <span class="dur">${eur(x.montant)}</span></div>`;
 }
+function depCls(k, val){ return (dp.lus && dp.lus.includes(k) ? " ocr" : "") + (dp.vides && dp.vides.includes(k) && !val ? " vide" : ""); }
+function depImg(u){ return `<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="Ticket" style="width:100%;max-height:200px;object-fit:contain;background:#f4f1ea;border-radius:12px"></a>`; }
+function depStatusTxt(){
+  if (!dp) return "";
+  if (dp.ocrState === "lecture") return `🔎 Lecture du ticket… <b>${Math.round((dp.pct || 0) * 100)} %</b><div class="bar"><i style="width:${Math.round((dp.pct || 0) * 100)}%"></i></div>`;
+  const nom = { date: "date", heure: "heure", montant: "montant", lib: "lieu", veh: "véhicule" };
+  if (dp.ocrState === "ok") return `✓ Lu sur le ticket : <b>${dp.lus.map(k => nom[k]).join(", ")}</b>. Vérifiez les cases jaunes.${dp.vides.length ? `<br><span style="color:#c03030;font-weight:800">⚠ Non lu, à remplir : ${dp.vides.map(k => nom[k]).join(", ")}.</span>` : ""}`;
+  if (dp.ocrState === "rien") return `⚠ Je n'ai rien pu lire. Les cases en rouge sont à remplir à la main, ou reprenez la photo bien à plat.`;
+  if (dp.ocrState === "erreur") return `⚠ Lecture impossible (pas de connexion ?). Remplissez à la main : la photo est gardée.`;
+  return "";
+}
+function depPhoto(file){
+  if (!file || !dp) return;
+  shrinkPhoto(file).then(blob => {
+    dp.blob = blob; dp.url = URL.createObjectURL(blob); dp.draft.photo = true; RECUS.put(dp.draft.id, blob);
+    depReadForm(); dp.ocrState = "lecture"; dp.pct = 0; dp.lus = []; dp.vides = [];
+    depSheet(dp.draft); depOcr();
+  });
+}
+async function depOcr(){
+  const id = dp.draft.id, blob = dp.blob;
+  try {
+    const txt = await ocrBlob(blob, pr => { if (dp && dp.draft.id === id){ dp.pct = pr; const el = document.getElementById("dp_status"); if (el) el.innerHTML = depStatusTxt(); } });
+    if (!dp || dp.draft.id !== id) return;
+    const r = parseRecu(txt); depReadForm(); const d = dp.draft, lus = [];
+    const fill = (k, field, v) => { if (v == null || v === "") return; if (!d[field]){ d[field] = v; lus.push(k); } };
+    fill("date", "date", r.date); fill("heure", "heure", r.heure); fill("montant", "montant", r.montant); fill("lib", "libelle", r.station);
+    if (r.immat && !d.vehicule){ const vh = (S.vehicules || []).find(v => v.immat === r.immat); if (vh){ d.vehicule = vh.nom; lus.push("veh"); } }
+    dp.lus = lus; dp.vides = ["date", "heure", "montant", "lib"].filter(k => !lus.includes(k) && !(k === "date" ? d.date : k === "heure" ? d.heure : k === "montant" ? d.montant : d.libelle));
+    dp.ocrState = lus.length ? "ok" : "rien"; depSheet(d);
+  } catch(e){ if (dp && dp.draft.id === id){ dp.ocrState = "erreur"; depSheet(dp.draft); } }
+}
+function depReadForm(){
+  if (!dp || !document.getElementById("dp_type")) return;
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  Object.assign(dp.draft, { type: g("dp_type"), date: g("dp_date"), heure: g("dp_heure"), libelle: g("dp_lib"), montant: numFr(g("dp_montant")), vehicule: g("dp_veh"), note: g("dp_note") });
+}
 function depSheet(x){
   const types = [...new Set([...(S.depTypes || []), ...(S.depenses || []).map(d => d.type).filter(Boolean)])];
   const veh = (S.vehicules || []).map(v => v.nom).filter(Boolean);
+  const photoBox = x.photo ? `<div id="dp_img">${dp.url ? depImg(dp.url) : ""}</div>` : "";
+  if (x.photo && !dp.url) photoUrl(x).then(u => { if (u && dp && dp.draft.id === x.id){ dp.url = u; const b = document.getElementById("dp_img"); if (b) b.innerHTML = depImg(u); } });
   openSheet(`<h2>🧾 ${dp.isNew ? "Nouvelle dépense" : "Modifier la dépense"}</h2>
+    ${photoBox}
+    <div class="row" style="margin:8px 0"><label class="btn go grow">📷 ${x.photo ? "Reprendre le ticket" : "Photographier le ticket"}<input type="file" accept="image/*" capture="environment" id="depCam" style="display:none"></label>
+      <label class="btn grow">🖼️ Galerie<input type="file" accept="image/*" id="depGal" style="display:none"></label></div>
+    <div id="dp_status" class="small" style="margin-bottom:6px">${depStatusTxt()}</div>
     <label class="f">Type de dépense</label><input class="t" id="dp_type" list="dpTypes" value="${esc(x.type || "")}" placeholder="ex. Péage, Parking, Lavage…">
     <datalist id="dpTypes">${types.map(t => `<option value="${esc(t)}">`).join("")}</datalist>
     <p class="small muted" style="margin:4px 0 0">Un nouveau type tapé ici est retenu pour la prochaine fois.</p>
-    <div class="row"><div class="grow"><label class="f">Date</label><input class="t" type="date" id="dp_date" value="${esc(x.date || dayKey(new Date()))}"></div>
-      <div class="grow"><label class="f">Heure</label><input class="t" type="time" id="dp_heure" value="${esc(x.heure || "")}"></div></div>
-    <label class="f">Lieu ou libellé</label><input class="t" id="dp_lib" value="${esc(x.libelle || "")}" placeholder="ex. A75 Gerzat, parking gare…">
-    <label class="f">Montant payé (€)</label><input class="t" id="dp_montant" inputmode="decimal" value="${fmtN(x.montant, 2)}" placeholder="ex. 4,20" style="font-size:20px;font-weight:900">
+    <div class="row"><div class="grow"><label class="f">Date</label><input class="t${depCls("date", x.date)}" type="date" id="dp_date" value="${esc(x.date || "")}"></div>
+      <div class="grow"><label class="f">Heure</label><input class="t${depCls("heure", x.heure)}" type="time" id="dp_heure" value="${esc(x.heure || "")}"></div></div>
+    <label class="f">Lieu ou libellé</label><input class="t${depCls("lib", x.libelle)}" id="dp_lib" value="${esc(x.libelle || "")}" placeholder="ex. A75 Gerzat, parking gare…">
+    <label class="f">Montant payé (€)</label><input class="t${depCls("montant", x.montant)}" id="dp_montant" inputmode="decimal" value="${fmtN(x.montant, 2)}" placeholder="ex. 4,20" style="font-size:20px;font-weight:900">
     <label class="f">Véhicule</label><input class="t" id="dp_veh" list="dpVehs" value="${esc(x.vehicule || "")}" placeholder="facultatif">
     <datalist id="dpVehs">${veh.map(v => `<option value="${esc(v)}">`).join("")}</datalist>
     <label class="f">Remarque</label><input class="t" id="dp_note" value="${esc(x.note || "")}" placeholder="facultatif">
@@ -1962,10 +2006,10 @@ function depSave(){
   const x = dp.draft;
   Object.assign(x, { type, date: g("dp_date") || dayKey(new Date()), heure: g("dp_heure"), libelle: g("dp_lib"), montant: numFr(g("dp_montant")), vehicule: g("dp_veh"), note: g("dp_note") });
   if (!S.depTypes.some(t => t.toLowerCase() === type.toLowerCase())) S.depTypes.push(type);
-  if (dp.isNew){ S.depenses = S.depenses || []; S.depenses.push(x); }
+  if (dp.isNew){ S.depenses = S.depenses || []; S.depenses.push(x); }   // photo déjà gardée sur l'appareil
   else { const j = S.depenses.findIndex(d => d.id === x.id); if (j >= 0) S.depenses[j] = x; }
   save(); carbuMonth = (x.date || "").slice(0, 7) || carbuMonth;
-  dp = null; closeSheet(); render(); toast("Dépense enregistrée ✓");
+  dp = null; closeSheet(); render(); toast("Dépense enregistrée ✓"); uploadPhotos();
 }
 function lastPlein(){ return (S.pleins || []).slice().sort((a, b) => (b.date + (b.heure || "")).localeCompare(a.date + (a.heure || "")))[0]; }
 function plSheet(p){
@@ -2364,7 +2408,7 @@ function addrField(attr, value, ph){
 document.addEventListener("toggle", e => { if (e.target.id === "pausedBox") pausedOpen = e.target.open; }, true);
 document.addEventListener("input", e => {
   if (e.target.id === "famSearch"){ famQ = e.target.value; const pos = e.target.selectionStart; render(); const el = document.getElementById("famSearch"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(x){} } return; }
-  if (e.target.id && e.target.id.startsWith("pl_")){ const x = e.target; delete x.dataset.auto; delete x.dataset.calc; x.classList.remove("ocr"); unVide(x); return; }
+  if (e.target.id && (e.target.id.startsWith("pl_") || e.target.id.startsWith("dp_"))){ const x = e.target; delete x.dataset.auto; delete x.dataset.calc; x.classList.remove("ocr"); unVide(x); return; }
   const t = e.target; if (!t.dataset || !t.dataset.addr) return;
   const box = t.closest(".addrbox"); if (!box) return;
   box.querySelector("[data-addrcheck]").href = mapsSearch(t.value);
@@ -2780,11 +2824,11 @@ document.addEventListener("click", e => {
   const i = Number(el.dataset.i), id = el.dataset.id;
   switch (a){
     case "close": closeSheet(); break;
-    case "depNew": dp = { isNew: true, draft: { id: uid(), type: "", date: dayKey(new Date()), heure: "", libelle: "", montant: null, vehicule: (lastPlein()?.vehicule || ""), note: "" } }; depSheet(dp.draft); break;
-    case "depOpen": { const x = (S.depenses || []).find(d => d.id === id); if (x){ dp = { isNew: false, draft: JSON.parse(JSON.stringify(x)) }; depSheet(dp.draft); } break; }
+    case "depNew": dp = { isNew: true, ocrState: "", lus: [], vides: [], draft: { id: uid(), type: "", date: "", heure: "", libelle: "", montant: null, vehicule: (lastPlein()?.vehicule || ""), note: "" } }; depSheet(dp.draft); break;
+    case "depOpen": { const x = (S.depenses || []).find(d => d.id === id); if (x){ dp = { isNew: false, ocrState: "", lus: [], vides: [], draft: JSON.parse(JSON.stringify(x)) }; depSheet(dp.draft); } break; }
     case "depSave": depSave(); break;
     case "depDel": if (el.dataset.ok !== "1"){ el.dataset.ok = "1"; el.textContent = "Confirmer la suppression ?"; break; }
-      S.depenses = S.depenses.filter(d => d.id !== dp.draft.id); save(); dp = null; closeSheet(); render(); toast("Dépense supprimée"); break;
+      S.depenses = S.depenses.filter(d => d.id !== dp.draft.id); RECUS.del(dp.draft.id); save(); dp = null; closeSheet(); render(); toast("Dépense supprimée"); break;
     case "plNew": pl = { id: null, isNew: true }; { const p = newPlein(); pl.id = p.id; pl.draft = p; plSheet(p); } break;
     case "plOpen": plOpen(id); break;
     case "plSave": plSave(); break;
@@ -3001,6 +3045,7 @@ document.addEventListener("change", e => {
     saveHist(mk); render(); toast("Horaire corrigé"); return;
   }
   if (t.id === "k_heure"){ const a = document.getElementById("alt_heure"); if (a && (!a.value || a.value === a.dataset.gen)) a.value = t.value; if (a) a.dataset.gen = t.value; return; }
+  if (t.id === "depCam" || t.id === "depGal"){ const f = t.files && t.files[0]; t.value = ""; depPhoto(f); return; }
   if (t.id === "sim_date" && t.value){ sim.date = t.value; simSheet(); return; }
   if (t.id === "sim_sens"){ sim.sens = t.value; simSheet(); return; }
   if (t.id === "carbuCam" || t.id === "carbuGal"){ const f = t.files && t.files[0]; t.value = ""; plFromFile(f); return; }
