@@ -1626,6 +1626,9 @@ function pointPdf(){
   const cols = [["Jour", 110], ["Date", 90], ["Heure de départ", 110], ["Heure de retour", 110], ["Total des heures", 100], ["Motif", W - 2*M - 520]];
   const motifW = cols[5][1] - 12;
   const RED = "0.85 0.1 0.1 rg", BLACK = "0 g";
+  // légende rouge sous la colonne Motif : explique que les noms en rouge sont les enfants absents
+  const LEGL = ["Enfant absent"];
+  const LEG = 14 + (LEGL.length - 1) * 9 + 8;
   // mise en page du motif : ligne 1 = tournée — établissements ; ligne 2 = prénoms (absents en rouge)
   const motifLayout = e => {
     const lines = [];
@@ -1652,19 +1655,22 @@ function pointPdf(){
   const T = (x, yy, t, size = 9, bold = false, col = BLACK) => ops.push(`${col} BT /${bold ? "F2" : "F1"} ${size} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET 0 g`);
   const L = (x1, y1, x2, y2) => ops.push(`0.35 G 0.6 w ${x1.toFixed(1)} ${y1.toFixed(1)} m ${x2.toFixed(1)} ${y2.toFixed(1)} l S`);
   let curCols = cols;
-  const clip = (t, w, size) => { t = String(t); if (txtW(t, size, false) <= w) return t; while (t.length && txtW(t + "…", size, false) > w) t = t.slice(0, -1); return t + "…"; };
+  let lastBot = 0; const legY = [];
+  const clip =(t, w, size) => { t = String(t); if (txtW(t, size, false) <= w) return t; while (t.length && txtW(t + "…", size, false) > w) t = t.slice(0, -1); return t + "…"; };
   const header = () => {
     ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
     let x = M; curCols.forEach(([l, w]) => { T(x + 6, y - 15, l.toUpperCase(), 8.5, true); x += w; });
     y -= RH;
   };
   const newPage = (first, hdr = true) => {
-    if (ops.length) pages.push(ops); ops = []; y = Hh - M;
-    if (first){ T(M, y - 12, rep.mode === "mois" ? PTG_TITRE : rep.mode === "semaine" ? "Pointage hebdomadaire des heures" : "Pointage des heures", 16, true); y -= 30; }
+    if (ops.length){ pages.push(ops); legY.push(lastBot); } ops = []; y = Hh - M;
+    if (first){ T(M, y - 12, rep.mode === "mois" ? PTG_TITRE : rep.mode === "semaine" ? "Pointage hebdomadaire des heures" : "Pointage des heures", 16, true);
+      y -= 30; }
     ops.push(`0.99 0.90 0.25 rg ${M} ${(y - 26).toFixed(1)} ${W - 2*M} 26 re f 0 g`);
     T(M + 8, y - 17, `CONDUCTEUR : ${S.chauffeur || "……………………………………"}`, 10, true);
     T(M + 440, y - 17, `PÉRIODE : ${repPeriode().toUpperCase()}`, 9, true); y -= 26;
     if (hdr) header();
+    lastBot = y;
   };
   newPage(true);
   const rowsAll = rowsData;
@@ -1682,10 +1688,12 @@ function pointPdf(){
     }
     L(M, yBot, W - M, yBot);
     let x = M; cols.forEach(([, w]) => { L(x, yBot, x, yTop); x += w; }); L(W - M, yBot, W - M, yTop);
-    y = yBot;
+    y = yBot; lastBot = yBot;
   });
   // bloc réservé à l'employeur (à laisser vide) : calcul des heures à ajouter
-  if (y - 3 * RH < M + 30) newPage(false, false);
+  if (y - 3 * RH - LEG < M + 30) newPage(false, false);
+  // place réservée pour la légende « Enfant absent » sous la dernière ligne de la colonne Motif
+  lastBot = y; y -= LEG;
   const mid = M + (W - 2*M) / 2;
   ops.push(`0.99 0.90 0.25 rg ${M} ${(y - RH).toFixed(1)} ${W - 2*M} ${RH} re f 0 g`);
   T(M + 6, y - 15, "Calcul des heures à ajouter – Heures réalisées (rubrique renseignée par Virginie Corbelin)", 9, true);
@@ -1714,14 +1722,17 @@ function pointPdf(){
     curCols = cols;
     y -= RH / 2;
   }
-  pages.push(ops);
+  pages.push(ops); legY.push(lastBot);
   // écriture du PDF
   const objs = []; const add = o => { objs.push(o); return objs.length; };
   const fN = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
   const fB = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
   const pagesId = objs.length + 1 + pages.length * 2; const kids = [];
   pages.forEach((pg, i) => {
-    const stream = pg.join("\n") + `\nBT /F1 8 Tf ${(W / 2 - 30).toFixed(1)} 20 Td (${pdfStr(`Page ${i + 1} / ${pages.length}`)}) Tj ET`;
+    // légende en bas de la colonne Motif (là où figurent les prénoms), sur chaque page
+    const legBase = (legY[i] ?? (Hh - M - 60)) - 12;
+    const legOps = LEGL.map((t, k) => `\n${RED} BT /${k ? "F1" : "F2"} ${k ? 7.5 : 8} Tf ${(M + 520 + 6).toFixed(1)} ${(legBase - k * 9).toFixed(1)} Td (${pdfStr(t)}) Tj ET ${BLACK}`).join("");
+    const stream = pg.join("\n") + legOps + `\nBT /F1 8 Tf ${(W / 2 - 30).toFixed(1)} 20 Td (${pdfStr(`Page ${i + 1} / ${pages.length}`)}) Tj ET`;
     const c = add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
     kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${Hh}] /Resources << /Font << /F1 ${fN} 0 R /F2 ${fB} 0 R >> >> /Contents ${c} 0 R >>`));
   });
