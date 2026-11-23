@@ -2509,6 +2509,22 @@ function famMsgsSheet(id){
   openSheet(h);
 }
 
+// tournée de dernière minute : saisie a posteriori, rangée dans l'historique comme les autres
+function manualSheet(){
+  const d = dayKey(new Date());
+  openSheet(`<h2>✍️ Tournée de dernière minute</h2>
+    <p class="small muted" style="margin:0 0 8px">Pour une tournée confiée au dernier moment, saisie après coup. Elle apparaît dans l'historique et dans les relevés.</p>
+    <label class="f">Nom de la tournée</label><input class="t" id="ml_nom" placeholder="ex. Remplacement collège">
+    <label class="f">Date</label><input class="t" type="date" id="ml_date" value="${d}">
+    <label class="f">Type</label><select class="t" id="ml_sens"><option value="matin">☀️ Aller</option><option value="midi">🕛 Midi</option><option value="soir">🌙 Retour</option></select>
+    <div class="row"><div class="grow"><label class="f">Heure de départ</label><input class="t" type="time" id="ml_debut"></div>
+      <div class="grow"><label class="f">Heure d'arrivée</label><input class="t" type="time" id="ml_fin"></div></div>
+    <label class="f">Enfant ou enfants</label><input class="t" id="ml_enf" placeholder="ex. Dounia, Evan">
+    <label class="f">Établissement ou établissements</label><input class="t" id="ml_etab" placeholder="ex. Collège Jean Moulin, Lycée Gasquet">
+    <p class="small muted" style="margin:6px 0 0">Séparez les prénoms et les établissements par une virgule. La durée se calcule à l'enregistrement.</p>
+    <button class="btn go w100" style="margin-top:12px" data-act="manualSave">Enregistrer dans l'historique</button>
+    <button class="btn w100" style="margin-top:8px" data-act="close">Annuler</button>`);
+}
 function renderHist(){
   const months = Object.keys(H).filter(mk => (H[mk]||[]).length).sort().reverse();
   if (!months.includes(histMonth)) months.unshift(histMonth);
@@ -2517,6 +2533,7 @@ function renderHist(){
   const tot = items.reduce((s,e) => s + (e.duree||0), 0);
   let h = `<div class="row" style="margin-bottom:12px"><select class="t grow" id="histMonth">${months.map(mk => `<option value="${mk}" ${mk===histMonth?"selected":""}>${moisTxt(mk)}</option>`).join("")}</select>
     <button class="btn" data-act="exportHist" ${items.length?"":"disabled"}>📋 Copier</button></div>
+    <button class="btn w100" style="margin-bottom:12px" data-act="manualNew">✍️ Saisir une tournée de dernière minute</button>
     <button class="btn brand w100" style="margin-bottom:12px;padding:13px" data-act="report" ${Object.values(H).some(x => x && x.length) ? "" : "disabled"}>📄 Éditer un relevé pour l'employeur</button>
     <div class="tot"><div><span class="small muted">Tournées</span><b>${items.length}</b></div><div><span class="small muted">Temps total</span><b>${durTxt(tot)}</b></div>
       <div><span class="small muted">☀️ / 🌙</span><b>${items.filter(e=>e.sens==="matin").length} / ${items.filter(e=>e.sens==="soir").length}</b></div></div>`;
@@ -3273,6 +3290,23 @@ document.addEventListener("click", e => {
     case "copy": copyText(el.dataset.text); break;
     case "mic": toggleMic(); break;
     case "histOpen": openHist = openHist === id ? null : id; render(); break;
+    case "manualNew": manualSheet(); break;
+    case "manualSave": {
+      const nom = document.getElementById("ml_nom").value.trim(), date = document.getElementById("ml_date").value;
+      const sens = document.getElementById("ml_sens").value, debut = document.getElementById("ml_debut").value, fin = document.getElementById("ml_fin").value;
+      const enfants = document.getElementById("ml_enf").value.split(",").map(x => x.trim()).filter(Boolean);
+      const etabs = document.getElementById("ml_etab").value.split(",").map(x => x.trim()).filter(Boolean);
+      if (!nom){ toast("Donnez un nom à la tournée"); break; }
+      if (!date || !debut || !fin){ toast("Indiquez la date et les deux heures"); break; }
+      if (!enfants.length){ toast("Indiquez au moins un enfant"); break; }
+      if (!etabs.length){ toast("Indiquez au moins un établissement"); break; }
+      const startD = new Date(`${date}T${debut}:00`); let endD = new Date(`${date}T${fin}:00`);
+      if (endD <= startD) endD = new Date(endD.getTime() + 86400000);   // arrivée après minuit
+      const entry = { id: uid(), date, tourneeId: "", tourneeNom: nom, etab: etabs.join(", "), sens, start: startD.toISOString(), end: endD.toISOString(),
+        duree: Math.round((endD - startD) / 60000), nb: enfants.length, absents: [], remplace: "", responsable: "", enfants, etablissements: etabs,
+        etapes: etabs.map(x => ({ label: x, at: null })), dernierArret: null, retour: null, manuel: true };
+      const mk = monthKey(entry.start); H[mk] = [entry, ...(H[mk]||[])];
+      histMonth = mk; save(); saveHist(mk); closeSheet(); render(); toast(`Tournée enregistrée · ${durTxt(entry.duree)} ✓`); break; }
     case "histDel": confirmSheet("Supprimer cette tournée de l'historique ?", "Cette action est définitive.", "histDelOk", "Supprimer"); pendingDel = id; break;
     case "histDelOk": { const [mk] = findHist(pendingDel); if (mk){ H[mk] = H[mk].filter(x => x.id !== pendingDel); saveHist(mk); } closeSheet(); render(); break; }
     case "exportHist": {
