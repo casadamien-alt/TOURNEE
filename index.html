@@ -535,6 +535,16 @@ function geoUpdate(){
 }
 document.addEventListener("visibilitychange", () => geoUpdate());
 
+// accueil de l'établissement (responsable, accès, code barrière) : rien s'il n'est pas renseigné
+function etabAccueilHtml(e){
+  if (!e) return "";
+  const r = e.resp || {}; const rows = [];
+  if (r.nom || r.tel) rows.push(`<div><b>👤 Responsable :</b> ${esc(r.nom || "")}${r.tel ? ` <a class="btn sm" href="tel:${esc(String(r.tel).replace(/\s+/g, ""))}">📞 ${esc(r.tel)}</a>` : ""}</div>`);
+  if (e.entree) rows.push(`<div style="margin-top:6px"><b>🚪 Accès :</b> ${esc(e.entree)}</div>`);
+  if (e.codeBarriere) rows.push(`<div style="font-size:26px;font-weight:900;margin-top:10px">🔢 Code : ${esc(e.codeBarriere)}</div>`);
+  return rows.length ? `<div class="com" style="font-size:16px;margin-top:10px;text-align:left">${rows.join("")}</div>` : "";
+}
+
 let arrMsgKey = "devant";
 function arriveSheet(){
   const a = S.active; if (!a) return;
@@ -555,6 +565,7 @@ function arriveSheet(){
     h = `<div class="arrive"><div class="big">${isKid ? "🚸" : "🏫"}</div><h2>${q}</h2>
       ${isKid ? `<div class="addr" style="font-size:16px">📍 ${esc(s.kid.adresse || "")}</div>` : ""}
       ${com ? `<div class="com ${night?"s":""}" style="font-size:16px;margin-top:10px"><b>${night?"🌙 Dépôt :":"☀️ Ramassage :"}</b> ${esc(com)}</div>` : ""}
+      ${isKid ? "" : etabAccueilHtml(SE(s, a))}
       ${nt && nt.adr
         ? `<a class="btn go arrive-ok" data-act="validateArr" data-i="${ci}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nt.adr, []))}">${okInner}</a>`
         : `<button class="btn go arrive-ok" data-act="validateArr" data-i="${ci}">${okInner}</button>`}`;
@@ -738,11 +749,12 @@ function simSheet(){
     return `<div class="card" style="padding:8px 12px;margin:6px 0"><div class="row"><span class="num">${n}</span><b class="grow">${esc(kidName(k))}</b>${sens === "matin" && ek.heureMatin ? `<span class="pill m">${hTxt(ek.heureMatin)}</span>` : ""}</div>
       <div class="addr">📍 ${esc(ek.adresse || "Adresse manquante")}${ek.altLabel ? ` <span class="pill" style="background:#e6f0ff;color:var(--call)">🏠 ${esc(ek.altLabel)}</span>` : ""}</div>
       ${t.etabs.length > 1 ? `<div class="small muted">🏫 ${esc(kidEtab(t, k).nom || "Établissement")}</div>` : ""}${com ? `<div class="small muted">💬 ${esc(com)}</div>` : ""}</div>`; };
-  const etabLine = (e, kids) => `<div class="card" style="padding:8px 12px;margin:6px 0;background:#f4f1ea"><b>🏫 ${esc(e.nom || "Établissement")}</b> <span class="small muted">${sens === "soir" ? "récupérer" : "déposer"} : ${esc(kids.map(k => k.prenom).join(", "))}</span></div>`;
+  const etabLine = (e, kids) => `<div class="card" style="padding:8px 12px;margin:6px 0;background:#f4f1ea"><b>🏫 ${esc(e.nom || "Établissement")}</b> <span class="small muted">${sens === "soir" ? "récupérer" : "déposer"} : ${esc(kids.map(k => k.prenom).join(", "))}</span>${etabAccueilHtml(e)}</div>`;
   h += `<h3 style="margin:14px 0 4px">Étapes prévues</h3>`;
   if (!pres.length) h += `<p class="small muted">Aucun enfant à transporter sur ce trajet ce jour-là.</p>`;
   else if (sens === "midi"){
-    pres.forEach((k, i) => { const d = midiDestOf(t, k); h += `<div class="card" style="padding:8px 12px;margin:6px 0"><span class="num">${i+1}</span> <b>${esc(kidName(k))}</b><div class="small">🏫 ${esc(kidEtab(t, k).nom || "Établissement")} → ${d.adr ? "📍 " + esc(k.midiLib || k.midiAdr) : "🏫 " + esc(d.etab.nom || "Établissement")}</div></div>`; });
+    const accueilVu = new Set();   // accueil de chaque établissement de récupération affiché une seule fois
+    pres.forEach((k, i) => { const d = midiDestOf(t, k); const ke = kidEtab(t, k); h += `<div class="card" style="padding:8px 12px;margin:6px 0"><span class="num">${i+1}</span> <b>${esc(kidName(k))}</b><div class="small">🏫 ${esc(ke.nom || "Établissement")} → ${d.adr ? "📍 " + esc(k.midiLib || k.midiAdr) : "🏫 " + esc(d.etab.nom || "Établissement")}</div>${accueilVu.has(ke.id) ? "" : etabAccueilHtml(ke)}</div>`; accueilVu.add(ke.id); });
   } else {
     const groups = t.etabs.map(e => ({ e, kids: pres.filter(k => kidEtab(t, k).id === e.id) })).filter(g => g.kids.length);
     let n = 0;
@@ -1317,6 +1329,7 @@ function renderRun(){
         ${s.at && etabRef(a, SE(s, a)) ? (()=>{ const d=new Date(s.at); const late=(d.getHours()*60+d.getMinutes()) - toMinutes(etabRef(a, SE(s, a))); return `<div class="small" style="margin-top:6px;font-weight:800;color:${late>0?"var(--warn)":"var(--go)"}">${late>0?`⚠ Arrivé ${durTxt(late)} après ${night?"la fin":"le début"} des cours`:`✔ Arrivé ${durTxt(-late)} avant ${night?"la fin":"le début"} des cours`}</div>`; })() : ""}
         ${s.at ? `<div class="row" style="margin-top:10px"><span class="doneline grow">✔ Arrivé à ${hm(s.at)}</span><button class="btn sm" data-act="validate" data-i="${i}">Annuler</button></div>`
           : `<div class="actions row" style="margin-top:10px">${nav(SE(s, a)) ? `<a class="${i===ci && !S.modeAuto?"btn go":"btn sm"}" target="_blank" rel="noopener" href="${esc(mapsDirUrl("", nav(SE(s, a)), []))}">🧭 Y aller</a>` : ""}${SE(s, a).tel ? `<a class="btn sm call" data-href="${esc(telHref(SE(s, a).tel))}">📞 Établissement</a>` : ""}</div>
+             ${etabAccueilHtml(SE(s, a))}
              ${(s.pickup ?? night) ? `<button class="validate" data-act="pickupList" data-i="${i}">☐ Enfants récupérés — confirmer la liste<span class="small" style="display:block;font-weight:700;opacity:.8">cochez les enfants présents dans le véhicule</span></button>`
                      : validateBtn(i, "Arrivé à l'établissement — valider")}`}
       </div>`;
@@ -1457,6 +1470,10 @@ function renderEdit(){
       <td style="padding:3px 0"><input class="t" type="time" data-hor="${ei}.${d}.fin" value="${esc(h.fin||"")}" style="padding:7px"></td></tr>`; }).join("")}</table>
     <button class="btn sm" style="margin-top:6px" data-act="copyMon" data-i="${ei}">⇩ Recopier les horaires du lundi sur mardi → vendredi</button>`}
     <label class="f">Téléphone de l'établissement (facultatif)</label><input class="t" type="tel" data-tf="etabs.${ei}.tel" value="${esc(e.tel)}">
+    <div class="row"><div class="grow"><label class="f">Responsable (facultatif)</label><input class="t" data-tf="etabs.${ei}.resp.nom" value="${esc((e.resp||{}).nom||"")}" placeholder="ex. Mme Martin, secrétariat"></div>
+      <div class="grow"><label class="f">Tél. du responsable</label><input class="t" type="tel" inputmode="tel" data-tf="etabs.${ei}.resp.tel" value="${esc((e.resp||{}).tel||"")}"></div></div>
+    <label class="f">Accès / consignes d'arrivée (facultatif)</label><input class="t" data-tf="etabs.${ei}.entree" value="${esc(e.entree||"")}" placeholder="ex. entrée parking, sonner au portail">
+    <label class="f">Code barrière (facultatif)</label><input class="t" data-tf="etabs.${ei}.codeBarriere" value="${esc(e.codeBarriere||"")}" placeholder="ex. 1234A">
     ${t.etabs.length > 1 ? `<p class="small muted" style="margin:8px 0 0">Enfants : ${t.enfants.filter(k => kidEtab(t, k).id === e.id).map(k => esc(k.prenom)).join(", ") || "aucun pour l'instant"}</p>` : ""}
   </div>`).join("")}
   ${(t.ordrePrec || Array.isArray(t.ordreSoir) || Array.isArray(t.ordreRetour) || t.retourJour) ? `<div class="card"><h3>↩️ Ordres enregistrés</h3>
@@ -3389,7 +3406,8 @@ document.addEventListener("change", e => {
     const kn = knownEtabs().filter(x => !tr.etabs.some(y => etabKey(y) === etabKey(x)));
     const src = kn[Number(t.value)]; if (!src) return;
     const dst = tr.etabs[ei];
-    ["nom","adresse","gps","tel"].forEach(f => dst[f] = src[f] || "");
+    ["nom","adresse","gps","tel","entree","codeBarriere"].forEach(f => dst[f] = src[f] || "");
+    dst.resp = JSON.parse(JSON.stringify(src.resp || {}));
     dst.horaires = JSON.parse(JSON.stringify(src.horaires || {}));
     linkEtabs(tr); save(); render(); toast(`${src.nom || "Établissement"} repris ✓ (horaires compris)`); return;
   }
